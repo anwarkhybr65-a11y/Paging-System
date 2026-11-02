@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { pb } from "@/lib/pb";
+import { connectPocketBase, PB_URLS, pb } from "@/lib/pb";
 import { STAFF_COLLECTION } from "@/lib/auth";
 
 const AuthContext = createContext({
@@ -24,12 +24,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     const sync = () => {
+      if (!alive) return;
       setUser(currentUser());
       setLoading(false);
     };
-    sync();
-    return pb.authStore.onChange(sync);
+    const unsub = pb.authStore.onChange(sync);
+    connectPocketBase().finally(sync);
+    return () => {
+      alive = false;
+      unsub();
+    };
   }, []);
 
   const value = useMemo(
@@ -45,13 +51,16 @@ export function AuthProvider({ children }) {
           (value, index, list) => value && list.indexOf(value) === index,
         );
         let lastError;
-        for (const identity of identities) {
-          try {
-            const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(identity, secret);
-            setUser(auth.record);
-            return auth.record;
-          } catch (err) {
-            lastError = err;
+        for (const url of PB_URLS) {
+          pb.baseUrl = url;
+          for (const identity of identities) {
+            try {
+              const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(identity, secret);
+              setUser(auth.record);
+              return auth.record;
+            } catch (err) {
+              lastError = err;
+            }
           }
         }
         throw lastError;
