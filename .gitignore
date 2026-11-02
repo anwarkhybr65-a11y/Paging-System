@@ -3,3 +3,4 @@ node_modules
 out
 data/queue.json
 *.log
+pb_data

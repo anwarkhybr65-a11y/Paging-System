@@ -30,7 +30,15 @@ export function LoginForm() {
       router.replace(homeForRole(record.role));
     } catch (err) {
       console.error(err);
-      setError("اسم المستخدم أو كلمة المرور غير صحيحة");
+      const status = Number(err?.status || err?.statusCode || err?.response?.status || 0);
+      const message = String(err?.message || err?.data?.message || "");
+      if (status === 400 || /invalid|failed to authenticate/i.test(message)) {
+        setError("اسم المستخدم أو كلمة المرور غير صحيحة");
+      } else if (!status || /fetch|network|failed to fetch|econnrefused/i.test(message)) {
+        setError("تعذر الاتصال بالخادم. تأكد أن PocketBase يعمل.");
+      } else {
+        setError("تعذر تسجيل الدخول. حاول مرة أخرى.");
+      }
     } finally {
       setBusy(false);
     }

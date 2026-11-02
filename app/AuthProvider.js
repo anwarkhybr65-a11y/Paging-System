@@ -37,7 +37,14 @@ export function AuthProvider({ children }) {
       user,
       loading,
       login: async (username, password) => {
-        const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(username.trim(), password);
+        const identity = String(username || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString());
+        const secret = String(password || "")
+          .trim()
+          .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString());
+        const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(identity, secret);
         setUser(auth.record);
         return auth.record;
       },
