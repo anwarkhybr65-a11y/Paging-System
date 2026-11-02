@@ -1,0 +1,345 @@
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { Building2, DoorOpen, LogOut, Megaphone, RefreshCcw, Users } from 'lucide-react';
+import { callingFilter, filterTicketsByDate, nowIso, pb, TICKET_STATUS, waitingFilter } from '@/lib/pb';
+import { playCallAnnouncement, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
+import { TicketsFlowTable } from '../TicketsFlowTable';
+import { ArchiveToolbar } from '../ArchiveToolbar';
+import { UserBar } from '../UserBar';
+import { useAuth } from '../AuthProvider';
+import { ROLES } from '@/lib/auth';
+
+export default function DoctorPage() {
+  const { user } = useAuth();
+  const [clinics, setClinics] = useState([]);
+  const [selectedClinic, setSelectedClinic] = useState('');
+  const [currentTicket, setCurrentTicket] = useState(null);
+  const [waitingTickets, setWaitingTickets] = useState([]);
+  const [clinicTickets, setClinicTickets] = useState([]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [archiveDate, setArchiveDate] = useState('');
+  const knownWaitingIds = useRef(null);
+  const assignedClinic = user?.clinic || '';
+  const clinicLocked = user?.role === ROLES.doctor && Boolean(assignedClinic);
+
+  useEffect(() => {
+    async function fetchClinics() {
+      try {
+        const records = await pb.collection('clinics').getFullList();
+        if (clinicLocked) {
+          const assigned = records.filter((clinic) => clinic.id === assignedClinic);
+          setClinics(assigned.length ? assigned : records);
+          setSelectedClinic(assignedClinic);
+          return;
+        }
+        setClinics(records);
+        if (records.length > 0) {
+          setSelectedClinic(records[0].id);
+        }
+      } catch (err) {
+        console.error('Error fetching clinics:', err);
+        setError('تعذر جلب العيادات');
+      }
+    }
+    fetchClinics();
+  }, [assignedClinic, clinicLocked]);
+
+  useEffect(() => {
+    knownWaitingIds.current = null;
+  }, [selectedClinic]);
+
+  useEffect(() => {
+    if (!selectedClinic) return;
+    let cancelled = false;
+
+    async function refreshQueue() {
+      try {
+        const waiting = await pb.collection('tickets').getFullList({
+          filter: waitingFilter(selectedClinic),
+          sort: 'created',
+        });
+        const calling = await pb.collection('tickets').getList(1, 1, {
+          filter: callingFilter(selectedClinic),
+          sort: '-updated',
+        });
+        const clinicRows = await pb.collection('tickets').getFullList({
+          filter: `clinic_id = "${selectedClinic}"`,
+          sort: '-created',
+          expand: 'clinic_id,doctor',
+        });
+        if (cancelled) return;
+
+        const previousIds = knownWaitingIds.current;
+        knownWaitingIds.current = new Set(waiting.map((ticket) => ticket.id));
+        if (previousIds && waiting.some((ticket) => !previousIds.has(ticket.id))) {
+          playReturningPatientSound();
+        }
+
+        setWaitingTickets(waiting);
+        setCurrentTicket(calling.items[0] || null);
+        setClinicTickets(clinicRows);
+        setError('');
+      } catch (err) {
+        console.error('Error fetching waiting tickets:', err);
+        if (!cancelled) setError('تعذر جلب قائمة الانتظار');
+      }
+    }
+
+    refreshQueue();
+    const timer = setInterval(refreshQueue, 2000);
+    const subscription = pb.collection('tickets').subscribe('*', refreshQueue);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      Promise.resolve(subscription).then((unsub) => {
+        if (typeof unsub === 'function') unsub();
+        else pb.collection('tickets').unsubscribe('*');
+      }).catch(() => {});
+    };
+  }, [selectedClinic]);
+
+  const clinicName = clinics.find((clinic) => clinic.id === selectedClinic)?.name || 'العيادة';
+
+  const handleNextPatient = async () => {
+    if (!selectedClinic || busy) return;
+
+    try {
+      setBusy(true);
+      const waitingTicketsPage = await pb.collection('tickets').getList(1, 1, {
+        filter: waitingFilter(selectedClinic),
+        sort: 'created',
+      });
+
+      if (waitingTicketsPage.items.length === 0) {
+        alert('لا توجد تذاكر في قائمة الانتظار لهذه العيادة');
+        return;
+      }
+
+      const nextTicket = waitingTicketsPage.items[0];
+      const currentCalling = await pb.collection('tickets').getFullList({
+        filter: callingFilter(selectedClinic),
+      });
+      await Promise.all(
+        currentCalling.map((ticket) =>
+          pb.collection('tickets').update(ticket.id, {
+            status: TICKET_STATUS.completed,
+            exited_at: ticket.exited_at || nowIso(),
+          }),
+        ),
+      );
+
+      const updated = await pb.collection('tickets').update(nextTicket.id, {
+        status: TICKET_STATUS.calling,
+        called_at: nextTicket.called_at || nowIso(),
+      });
+
+      setCurrentTicket(updated);
+      setWaitingTickets((tickets) => tickets.filter((ticket) => ticket.id !== nextTicket.id));
+      setError('');
+      
+      playCallAnnouncement(updated.ticket_number, clinicName);
+
+    } catch (err) {
+      console.error('Error calling next patient:', err);
+      alert('حدث خطأ أثناء نداء المريض');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleEnterClinic = async () => {
+    if (!currentTicket?.id || busy) {
+      alert('لا يوجد مريض حالي لتسجيل دخوله');
+      return;
+    }
+    if (currentTicket.entered_at) {
+      alert('تم تسجيل دخول هذا المريض مسبقاً');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const updated = await pb.collection('tickets').update(currentTicket.id, {
+        entered_at: nowIso(),
+      });
+      setCurrentTicket(updated);
+      setError('');
+    } catch (err) {
+      console.error('Error recording clinic entry:', err);
+      alert('حدث خطأ أثناء تسجيل دخول المريض');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!currentTicket?.id || busy) {
+      alert('لا يوجد مريض حالي لإخراجه');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await pb.collection('tickets').update(currentTicket.id, {
+        status: TICKET_STATUS.completed,
+        exited_at: currentTicket.exited_at || nowIso(),
+      });
+      setCurrentTicket(null);
+      setError('');
+    } catch (err) {
+      console.error('Error checking out patient:', err);
+      alert('حدث خطأ أثناء إخراج المريض');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRecall = async () => {
+    if (!currentTicket?.id || busy) {
+      alert('لا يوجد رقم حالي لإعادة ندائه');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const recalled = await pb.collection('tickets').update(currentTicket.id, {
+        status: TICKET_STATUS.calling,
+      });
+      setCurrentTicket(recalled);
+      
+      playCallAnnouncement(recalled.ticket_number, clinicName);
+
+    } catch (err) {
+      console.error('Error recalling patient:', err);
+      alert('حدث خطأ أثناء إعادة المناداة');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className="w-full rounded-[32px] bg-paper p-6 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-8">
+        <div className="mb-8 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+              <Megaphone size={24} strokeWidth={1.8} />
+            </div>
+            <h1 className="text-2xl font-black leading-snug text-ink sm:text-3xl">لوحة تحكم الطبيب - إدارة النداء</h1>
+          </div>
+          <UserBar />
+        </div>
+
+        <div className="mb-6 text-right">
+          <label className="mb-2 flex items-center gap-2 font-semibold text-warm">
+            <Building2 size={18} />
+            اختر العيادة الخاصة بك:
+          </label>
+          <select
+            className="w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3.5 outline-none transition focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-80"
+            value={selectedClinic}
+            disabled={clinicLocked}
+            onChange={(e) => {
+              unlockAudio();
+              setSelectedClinic(e.target.value);
+            }}
+          >
+            {clinics.map((clinic) => (
+              <option key={clinic.id} value={clinic.id}>
+                {clinic.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mb-6 rounded-[28px] bg-sky-700 p-7 text-center text-white shadow-[0_16px_36px_rgba(42,101,130,0.28)]">
+          <p className="mb-2 text-sky-100">المريض الحالي في العيادة:</p>
+          <p className="text-6xl font-black tracking-wide sm:text-7xl">{currentTicket?.ticket_number || 'لا يوجد'}</p>
+          {currentTicket?.notes ? (
+            <p className="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-right text-sm leading-7 text-sky-50">
+              ملاحظة الاستقبال: {currentTicket.notes}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50 px-5 py-4">
+          <span className="flex items-center gap-2 font-medium text-warm">
+            <Users size={18} />
+            عدد المنتظرين بالخارج:
+          </span>
+          <span className="inline-flex min-w-10 items-center justify-center rounded-full bg-paper px-3 py-1 text-2xl font-black text-sky-700 ring-1 ring-sky-100">
+            {waitingTickets.length}
+          </span>
+        </div>
+
+        <div className="mb-6 rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
+          <p className="mb-3 font-semibold text-sky-800">حالات الانتظار</p>
+          {waitingTickets.length === 0 ? (
+            <p className="text-sm text-warm">لا توجد تذاكر منتظرة لهذه العيادة</p>
+          ) : (
+            <ul className="space-y-2">
+              {waitingTickets.map((ticket, index) => (
+                <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
+                  </div>
+                  {ticket.notes ? (
+                    <p className="mt-2 text-sm leading-6 text-warm">ملاحظة الاستقبال: {ticket.notes}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {error ? <p className="mb-4 font-bold text-red-700">{error}</p> : null}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            onClick={handleNextPatient}
+            disabled={busy}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-600 py-4 px-6 text-xl font-black text-white shadow-[0_10px_24px_rgba(52,126,160,0.28)] transition hover:bg-sky-700 disabled:opacity-60"
+          >
+            <Megaphone size={22} />
+            نداء المريض التالي 📢
+          </button>
+          <button
+            onClick={handleRecall}
+            disabled={busy || !currentTicket}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-100 py-4 px-6 text-xl font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
+          >
+            <RefreshCcw size={22} />
+            إعادة المناداة 🔁
+          </button>
+          <button
+            onClick={handleEnterClinic}
+            disabled={busy || !currentTicket || Boolean(currentTicket?.entered_at)}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-700 py-4 px-6 text-xl font-black text-white transition hover:bg-sky-800 disabled:opacity-60"
+          >
+            <DoorOpen size={22} />
+            دخول العيادة
+          </button>
+          <button
+            onClick={handleCheckout}
+            disabled={busy || !currentTicket}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-ink py-4 px-6 text-xl font-black text-white transition hover:bg-black disabled:opacity-60"
+          >
+            <LogOut size={22} />
+            خروج المريض ✅
+          </button>
+        </div>
+      </div>
+
+      <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
+        <h2 className="mb-4 text-xl font-black text-ink">جدول دخول وخروج المرضى</h2>
+        <ArchiveToolbar date={archiveDate} onChange={setArchiveDate} />
+        <TicketsFlowTable tickets={filterTicketsByDate(clinicTickets, archiveDate)} clinics={clinics} />
+      </section>
+      </div>
+    </div>
+  );
+}
