@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
-import { clinicNameOf, displayImageUrl, pb, TICKET_STATUS } from "@/lib/pb";
+import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
 import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
 
 function useClock() {
@@ -32,6 +32,7 @@ export default function DisplayPage() {
 
   async function loadImages() {
     try {
+      await ensurePocketBase();
       const records = await pb.collection("display_images").getFullList({ sort: "-created" });
       setImages(records);
       setCurrentImageIndex(0);
@@ -42,6 +43,7 @@ export default function DisplayPage() {
 
   async function loadQueue() {
     try {
+      await ensurePocketBase();
       const [calling, waiting] = await Promise.all([
         pb.collection("tickets").getFullList({
           filter: `status = "${TICKET_STATUS.calling}"`,

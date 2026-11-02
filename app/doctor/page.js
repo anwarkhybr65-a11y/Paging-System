@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Building2, DoorOpen, LogOut, Megaphone, RefreshCcw, Users } from 'lucide-react';
-import { callingFilter, filterTicketsByDate, nowIso, pb, TICKET_STATUS, waitingFilter } from '@/lib/pb';
+import { callingFilter, ensurePocketBase, filterTicketsByDate, nowIso, pb, TICKET_STATUS, waitingFilter } from '@/lib/pb';
 import { playCallAnnouncement, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar } from '../ArchiveToolbar';
@@ -26,6 +26,7 @@ export default function DoctorPage() {
   useEffect(() => {
     async function fetchClinics() {
       try {
+        await ensurePocketBase();
         const records = await pb.collection('clinics').getFullList();
         if (clinicLocked) {
           const assigned = records.filter((clinic) => clinic.id === assignedClinic);
@@ -55,6 +56,7 @@ export default function DoctorPage() {
 
     async function refreshQueue() {
       try {
+        await ensurePocketBase();
         const waiting = await pb.collection('tickets').getFullList({
           filter: waitingFilter(selectedClinic),
           sort: 'created',

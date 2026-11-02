@@ -14,12 +14,13 @@ function AuthLoading() {
 }
 
 export function RequireRole({ allow, allowPublic = false, children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, ready } = useAuth();
   const router = useRouter();
   const allowed = allow.join(",");
+  const waiting = !ready || loading;
 
   useEffect(() => {
-    if (loading) return;
+    if (waiting) return;
     if (!user) {
       if (!allowPublic) router.replace("/");
       return;
@@ -27,13 +28,13 @@ export function RequireRole({ allow, allowPublic = false, children }) {
     if (!allow.includes(user.role)) {
       router.replace(homeForRole(user.role));
     }
-  }, [user, loading, allowed, allowPublic, router, allow]);
+  }, [user, waiting, allowed, allowPublic, router, allow]);
 
-  if (allowPublic && (!user || allow.includes(user.role))) {
+  if (allowPublic && !waiting && (!user || allow.includes(user.role))) {
     return children;
   }
 
-  if (loading || !user || !allow.includes(user.role)) {
+  if (waiting || !user || !allow.includes(user.role)) {
     return <AuthLoading />;
   }
 

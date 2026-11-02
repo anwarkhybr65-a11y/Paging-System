@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, Printer, Search } from "lucide-react";
-import { ARABIC_MONTHS, formatDateTime, pb } from "@/lib/pb";
+import { ARABIC_MONTHS, ensurePocketBase, formatDateTime, pb } from "@/lib/pb";
 import {
   buildLiveReport,
   chooseReport,
@@ -37,6 +37,7 @@ export default function AdminStatsPage() {
   useEffect(() => {
     async function load() {
       try {
+        await ensurePocketBase();
         const [ticketRows, doctorRows, reportRows] = await Promise.all([
           pb.collection("tickets").getFullList({ sort: "-created", expand: "clinic_id,doctor" }),
           pb.collection("doctors").getFullList({ sort: "name", expand: "clinic" }),

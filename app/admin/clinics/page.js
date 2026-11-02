@@ -2,28 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
-import { pb } from "@/lib/pb";
+import { ensurePocketBase, pb } from "@/lib/pb";
 import { UserBar } from "../../UserBar";
+import { useAuth } from "../../AuthProvider";
 
 export default function AdminClinicsPage() {
+  const { ready } = useAuth();
   const [clinics, setClinics] = useState([]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   async function loadClinics() {
     try {
+      await ensurePocketBase();
       const records = await pb.collection("clinics").getFullList({ sort: "name" });
       setClinics(records);
     } catch (err) {
       console.error(err);
       setMessage("تعذر جلب العيادات");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (!ready) return;
     loadClinics();
-  }, []);
+  }, [ready]);
 
   async function handleAdd(event) {
     event.preventDefault();
@@ -40,8 +47,10 @@ export default function AdminClinicsPage() {
     try {
       setBusy(true);
       setMessage("");
+      await ensurePocketBase();
       await pb.collection("clinics").create({
         name: clinicName,
+        current_number: 0,
       });
       setName("");
       await loadClinics();
@@ -95,6 +104,10 @@ export default function AdminClinicsPage() {
 
         <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
           <h2 className="mb-4 text-xl font-black text-ink">العيادات الحالية</h2>
+          {loading ? <p className="font-bold text-warm">جاري تحميل العيادات...</p> : null}
+          {!loading && clinics.length === 0 ? (
+            <p className="font-bold text-warm">لا توجد عيادات حالياً. أضف عيادة من النموذج أعلاه.</p>
+          ) : null}
           <ul className="space-y-2">
             {clinics.map((clinic) => (
               <li key={clinic.id} className="rounded-2xl bg-sky-50 px-4 py-3 font-bold text-ink ring-1 ring-sky-100">

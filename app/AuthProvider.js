@@ -2,12 +2,13 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { connectPocketBase, PB_URLS, pb } from "@/lib/pb";
+import { ensurePocketBase, PB_URLS, pb } from "@/lib/pb";
 import { STAFF_COLLECTION } from "@/lib/auth";
 
 const AuthContext = createContext({
   user: null,
   loading: true,
+  ready: false,
   login: async () => {},
   logout: () => {},
 });
@@ -22,6 +23,7 @@ function currentUser() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -31,7 +33,11 @@ export function AuthProvider({ children }) {
       setLoading(false);
     };
     const unsub = pb.authStore.onChange(sync);
-    connectPocketBase().finally(sync);
+    ensurePocketBase()
+      .finally(() => {
+        if (alive) setReady(true);
+        sync();
+      });
     return () => {
       alive = false;
       unsub();
@@ -42,6 +48,7 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
+      ready,
       login: async (username, password) => {
         const rawIdentity = String(username || "").trim();
         const secret = String(password || "")
@@ -50,8 +57,12 @@ export function AuthProvider({ children }) {
         const identities = [rawIdentity.toLowerCase(), rawIdentity].filter(
           (value, index, list) => value && list.indexOf(value) === index,
         );
+        await ensurePocketBase();
+        const urls = [pb.baseUrl, ...PB_URLS].filter(
+          (url, index, list) => url && list.indexOf(url) === index,
+        );
         let lastError;
-        for (const url of PB_URLS) {
+        for (const url of urls) {
           pb.baseUrl = url;
           for (const identity of identities) {
             try {
@@ -70,7 +81,7 @@ export function AuthProvider({ children }) {
         setUser(null);
       },
     }),
-    [user, loading],
+    [user, loading, ready],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

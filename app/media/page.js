@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
-import { displayImageUrl, pb } from "@/lib/pb";
+import { displayImageUrl, ensurePocketBase, pb } from "@/lib/pb";
 import { UserBar } from "../UserBar";
 
 export default function MediaPage() {
@@ -14,6 +14,7 @@ export default function MediaPage() {
 
   async function loadImages() {
     try {
+      await ensurePocketBase();
       const records = await pb.collection("display_images").getFullList({ sort: "-created" });
       setImages(records);
     } catch (err) {

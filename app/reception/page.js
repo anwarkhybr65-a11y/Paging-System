@@ -4,6 +4,7 @@ import { Building2, CalendarClock, Printer, SkipForward, Stethoscope, Ticket } f
 import { UserBar } from '../UserBar';
 import {
   doctorNameOf,
+  ensurePocketBase,
   filterTicketsByDate,
   pb,
   pickNextDailyNumber,
@@ -40,6 +41,7 @@ export default function ReceptionPage() {
   useEffect(() => {
     async function fetchClinics() {
       try {
+        await ensurePocketBase();
         const records = await pb.collection('clinics').getFullList();
         setClinics(records);
         if (records.length > 0) {
@@ -58,6 +60,7 @@ export default function ReceptionPage() {
 
     async function loadTickets() {
       try {
+        await ensurePocketBase();
         const records = await pb.collection('tickets').getFullList({
           sort: '-created',
           expand: 'clinic_id,doctor',
@@ -94,6 +97,7 @@ export default function ReceptionPage() {
 
     async function loadDoctors() {
       try {
+        await ensurePocketBase();
         const records = await pb.collection('doctors').getFullList({
           sort: 'name',
           expand: 'clinic',

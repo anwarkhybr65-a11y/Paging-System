@@ -2,33 +2,41 @@
 
 import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
-import { pb } from "@/lib/pb";
+import { ensurePocketBase, pb } from "@/lib/pb";
 import { STAFF_COLLECTION } from "@/lib/auth";
 import { UserBar } from "../../UserBar";
+import { useAuth } from "../../AuthProvider";
 
 export default function AdminDoctorsPage() {
+  const { ready } = useAuth();
   const [doctors, setDoctors] = useState([]);
   const [names, setNames] = useState({});
   const [savingId, setSavingId] = useState("");
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   async function loadDoctors() {
     try {
+      await ensurePocketBase();
       const records = await pb.collection("doctors").getFullList({
         sort: "name",
         expand: "clinic",
       });
       setDoctors(records);
       setNames(Object.fromEntries(records.map((doctor) => [doctor.id, doctor.name || ""])));
+      setMessage("");
     } catch (err) {
       console.error(err);
       setMessage("تعذر جلب قائمة الأطباء");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (!ready) return;
     loadDoctors();
-  }, []);
+  }, [ready]);
 
   async function handleSave(doctor) {
     const name = (names[doctor.id] || "").trim();
@@ -40,6 +48,7 @@ export default function AdminDoctorsPage() {
     try {
       setSavingId(doctor.id);
       setMessage("");
+      await ensurePocketBase();
       await pb.collection("doctors").update(doctor.id, { name });
       const clinicId = doctor.clinic || doctor.expand?.clinic?.id;
       if (clinicId) {
@@ -80,6 +89,10 @@ export default function AdminDoctorsPage() {
 
         <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
           {message ? <p className="mb-4 font-bold text-sky-800">{message}</p> : null}
+          {loading ? <p className="font-bold text-warm">جاري تحميل الأطباء...</p> : null}
+          {!loading && doctors.length === 0 ? (
+            <p className="font-bold text-warm">لا يوجد أطباء بعد. أضف العيادات أولاً ثم حدّث الصفحة.</p>
+          ) : null}
           <div className="space-y-4">
             {doctors.map((doctor) => (
               <div key={doctor.id} className="grid gap-3 rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-100 sm:grid-cols-[minmax(0,1fr)_220px_auto] sm:items-end">

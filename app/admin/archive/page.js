@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Archive } from "lucide-react";
-import { filterTicketsByDate, pb } from "@/lib/pb";
+import { ensurePocketBase, filterTicketsByDate, pb } from "@/lib/pb";
 import { ArchiveToolbar } from "../../ArchiveToolbar";
 import { TicketStats, TicketsFlowTable } from "../../TicketsFlowTable";
 import { UserBar } from "../../UserBar";
@@ -15,6 +15,7 @@ export default function AdminArchivePage() {
   useEffect(() => {
     async function loadClinics() {
       try {
+        await ensurePocketBase();
         setClinics(await pb.collection("clinics").getFullList());
       } catch (err) {
         console.error(err);
@@ -28,6 +29,7 @@ export default function AdminArchivePage() {
 
     async function loadTickets() {
       try {
+        await ensurePocketBase();
         const records = await pb.collection("tickets").getFullList({
           sort: "-created",
           expand: "clinic_id,doctor",
