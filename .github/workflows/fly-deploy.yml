@@ -1,19 +1,17 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
-
+# PocketBase on Fly.io must not redeploy on every git push.
+# A default fly deploy can create extra machines without the data volume,
+# which makes staff login fail. Deploy only when you run this workflow manually.
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - main
-      - master
+  workflow_dispatch:
 jobs:
   deploy:
-    name: Deploy app
+    name: Deploy PocketBase
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-group
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

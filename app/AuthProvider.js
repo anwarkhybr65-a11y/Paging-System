@@ -37,16 +37,24 @@ export function AuthProvider({ children }) {
       user,
       loading,
       login: async (username, password) => {
-        const identity = String(username || "")
-          .trim()
-          .toLowerCase()
-          .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString());
+        const rawIdentity = String(username || "").trim();
         const secret = String(password || "")
           .trim()
           .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString());
-        const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(identity, secret);
-        setUser(auth.record);
-        return auth.record;
+        const identities = [rawIdentity.toLowerCase(), rawIdentity].filter(
+          (value, index, list) => value && list.indexOf(value) === index,
+        );
+        let lastError;
+        for (const identity of identities) {
+          try {
+            const auth = await pb.collection(STAFF_COLLECTION).authWithPassword(identity, secret);
+            setUser(auth.record);
+            return auth.record;
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        throw lastError;
       },
       logout: () => {
         pb.authStore.clear();
