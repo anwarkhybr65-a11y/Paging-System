@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 import { ensurePocketBase, pb } from "@/lib/pb";
+import { BrandMark } from "../../BrandMark";
 import { UserBar } from "../../UserBar";
 import { useAuth } from "../../AuthProvider";
 
@@ -68,6 +69,7 @@ export default function AdminClinicsPage() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
+            <BrandMark size="sm" />
             <div className="mt-0.5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
               <Building2 size={24} strokeWidth={1.8} />
             </div>

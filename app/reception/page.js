@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Building2, CalendarClock, Printer, SkipForward, Stethoscope, Ticket } from 'lucide-react';
+import { BrandMark } from '../BrandMark';
 import { UserBar } from '../UserBar';
 import {
   doctorNameOf,
@@ -288,6 +289,7 @@ export default function ReceptionPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 print:hidden">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
+            <BrandMark size="sm" />
             <div className="mt-0.5 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
               <Ticket size={24} strokeWidth={1.8} />
             </div>

@@ -5,6 +5,7 @@ import { callingFilter, ensurePocketBase, filterTicketsByDate, nowIso, pb, TICKE
 import { playCallAnnouncement, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar } from '../ArchiveToolbar';
+import { BrandMark } from '../BrandMark';
 import { UserBar } from '../UserBar';
 import { useAuth } from '../AuthProvider';
 import { ROLES } from '@/lib/auth';
@@ -227,6 +228,7 @@ export default function DoctorPage() {
       <div className="w-full rounded-[32px] bg-paper p-6 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
+            <BrandMark size="sm" />
             <div className="mt-0.5 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
               <Megaphone size={24} strokeWidth={1.8} />
             </div>

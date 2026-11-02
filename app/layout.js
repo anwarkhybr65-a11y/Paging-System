@@ -14,6 +14,10 @@ export const metadata = {
     template: "%s | نظام النداء",
   },
   description: "نظام عربي لنداء المرضى وإدارة أرقام الانتظار",
+  icons: {
+    icon: [{ url: "/icon.png" }, { url: "/brand/ax-logo.png" }],
+    apple: "/apple-icon.png",
+  },
 };
 
 export const viewport = {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, UserRound } from "lucide-react";
+import { BrandMark } from "./BrandMark";
 import { useAuth } from "./AuthProvider";
 import { homeForRole } from "@/lib/auth";
 
@@ -46,7 +47,8 @@ export function LoginForm() {
 
   if (loading || user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-sky-50 via-offwhite to-offwhite" dir="rtl">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-linear-to-b from-sky-50 via-offwhite to-offwhite" dir="rtl">
+        <BrandMark size="md" />
         <p className="text-lg font-bold text-sky-800">جاري التوجيه...</p>
       </main>
     );
@@ -55,6 +57,7 @@ export function LoginForm() {
   return (
     <main className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite" dir="rtl">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">
+        <BrandMark size="lg" className="mb-6" />
         <p className="mb-3 text-sm font-semibold tracking-wide text-sky-700">مجمع انوار خيبر الطبي العام</p>
         <h1 className="text-4xl font-black tracking-tight text-ink">تسجيل الدخول</h1>
         <p className="mt-3 text-base leading-7 text-warm">

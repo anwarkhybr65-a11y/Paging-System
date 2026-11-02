@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
 import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
+import { BrandMark } from "../BrandMark";
 
 function useClock() {
   const [now, setNow] = useState(null);
@@ -117,6 +118,7 @@ export default function DisplayPage() {
     >
       {isNewCall && current ? (
         <section className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-display p-6 text-center sm:p-10">
+          <BrandMark size="md" className="mb-6" />
           <p className="text-3xl font-semibold text-sky-200 sm:text-4xl">نداء رقم جديد</p>
           <p className="call-pulse my-6 text-[clamp(7rem,28vw,16rem)] leading-none font-black tracking-wide text-white">
             {current.ticket_number}
@@ -131,7 +133,10 @@ export default function DisplayPage() {
         {hasQueue && !isNewCall ? (
           <aside className="flex min-h-[40vh] w-full flex-col border-sky-900/60 bg-[#143140] p-5 lg:min-h-screen lg:w-1/3 lg:border-l">
             <header className="mb-5 flex items-center justify-between gap-3">
-              <h1 className="text-xl font-black">قائمة النداء</h1>
+              <div className="flex items-center gap-3">
+                <BrandMark size="sm" />
+                <h1 className="text-xl font-black">قائمة النداء</h1>
+              </div>
               <p className="inline-flex items-center gap-2 rounded-full bg-sky-900/50 px-3 py-1.5 text-sky-200">
                 <Clock3 size={16} />
                 {clock
@@ -173,14 +178,20 @@ export default function DisplayPage() {
 
         <section className={`relative min-h-screen overflow-hidden bg-black ${hasQueue && !isNewCall ? "w-full lg:w-2/3" : "w-full"}`}>
           {imageSrc ? (
-            <img
-              src={imageSrc}
-              alt=""
-              className="h-full w-full object-cover"
-            />
+            <>
+              <img
+                src={imageSrc}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+              <div className="pointer-events-none absolute top-5 start-5 z-10">
+                <BrandMark size="sm" />
+              </div>
+            </>
           ) : (
             <div className="flex h-full min-h-screen flex-col items-center justify-center bg-gradient-to-br from-display via-sky-900 to-[#0b1c24] p-10 text-center">
-              <p className="text-4xl font-black">مستوصف العناية الطبية</p>
+              <BrandMark size="lg" className="mb-8" />
+              <p className="text-4xl font-black">مجمع انوار خيبر الطبي العام</p>
               <p className="mt-4 max-w-2xl text-xl text-sky-100">
                 أضف صوراً توعوية من صفحة إدارة الصور حتى تظهر هنا على الشاشة.
               </p>

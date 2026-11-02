@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { displayImageUrl, ensurePocketBase, pb } from "@/lib/pb";
+import { BrandMark } from "../BrandMark";
 import { UserBar } from "../UserBar";
 
 export default function MediaPage() {
@@ -75,9 +76,12 @@ export default function MediaPage() {
     <main className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite p-4 sm:p-6" dir="rtl">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-sky-700">شاشة العرض</p>
-            <h1 className="text-3xl font-black text-ink">إدارة الصور التوعوية</h1>
+          <div className="flex items-center gap-3">
+            <BrandMark size="sm" />
+            <div>
+              <p className="text-sm font-semibold text-sky-700">شاشة العرض</p>
+              <h1 className="text-3xl font-black text-ink">إدارة الصور التوعوية</h1>
+            </div>
           </div>
           <UserBar />
         </div>

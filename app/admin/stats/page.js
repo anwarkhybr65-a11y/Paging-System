@@ -14,6 +14,7 @@ import {
 } from "@/lib/statReports";
 import { TicketStats } from "../../TicketsFlowTable";
 import { StatsPieChart } from "../../StatsPieChart";
+import { BrandMark } from "../../BrandMark";
 import { UserBar } from "../../UserBar";
 
 function currentYear() {
@@ -127,6 +128,7 @@ export default function AdminStatsPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <div className="flex items-start justify-between gap-3 print:hidden">
           <div className="flex items-start gap-3">
+            <BrandMark size="sm" />
             <div className="mt-0.5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
               <BarChart3 size={24} strokeWidth={1.8} />
             </div>

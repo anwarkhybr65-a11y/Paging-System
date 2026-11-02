@@ -4,10 +4,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import { homeForRole } from "@/lib/auth";
+import { BrandMark } from "./BrandMark";
 
 function AuthLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-sky-50 via-offwhite to-offwhite" dir="rtl">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-linear-to-b from-sky-50 via-offwhite to-offwhite" dir="rtl">
+      <BrandMark size="md" />
       <p className="text-lg font-bold text-sky-800">جاري التحقق من الحساب...</p>
     </div>
   );
