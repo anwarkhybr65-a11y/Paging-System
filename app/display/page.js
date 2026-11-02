@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
-import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
+import { isAudioUnlocked, playCallAnnouncement, unlockAudio } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
 function useClock() {
@@ -23,7 +23,9 @@ export default function DisplayPage() {
   const [isNewCall, setIsNewCall] = useState(false);
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [soundReady, setSoundReady] = useState(false);
   const overlayTimer = useRef(null);
+  const lastCallKey = useRef("");
   const clock = useClock();
 
   const current = callingTickets[0] || null;
@@ -64,41 +66,68 @@ export default function DisplayPage() {
     }
   }
 
-  function startCallOverlay(ticketNumber, clinicName) {
+  function startCallOverlay(ticketNumber, clinicName, callKey) {
+    if (callKey && lastCallKey.current === callKey) return;
+    if (callKey) lastCallKey.current = callKey;
     setIsNewCall(true);
     playCallAnnouncement(ticketNumber, clinicName);
     if (overlayTimer.current) clearTimeout(overlayTimer.current);
     overlayTimer.current = setTimeout(() => setIsNewCall(false), 30000);
   }
 
+  async function enableSound() {
+    const ok = await unlockAudio();
+    if (ok) setSoundReady(true);
+  }
+
   useEffect(() => {
-    loadImages();
-    loadQueue();
+    if (isAudioUnlocked()) setSoundReady(true);
+  }, []);
 
-    const ticketsSub = pb.collection("tickets").subscribe("*", async (event) => {
-      await loadQueue();
-      if (event.action === "update" && event.record.status === TICKET_STATUS.calling) {
-        let clinicName = "العيادة";
-        try {
-          const updatedTicket = await pb.collection("tickets").getOne(event.record.id, {
-            expand: "clinic_id",
-          });
-          clinicName = clinicNameOf(updatedTicket);
-        } catch (err) {
-          console.error("Error fetching expanded clinic info:", err);
-        }
-        startCallOverlay(event.record.ticket_number, clinicName);
+  useEffect(() => {
+    let cancelled = false;
+    const unsub = { tickets: null, images: null };
+
+    async function announceCall(record) {
+      if (!record || record.status !== TICKET_STATUS.calling) return;
+      let clinicName = clinicNameOf(record) || "العيادة";
+      try {
+        const updatedTicket = await pb.collection("tickets").getOne(record.id, {
+          expand: "clinic_id",
+        });
+        clinicName = clinicNameOf(updatedTicket) || clinicName;
+      } catch (err) {
+        console.error("Error fetching expanded clinic info:", err);
       }
-    });
+      if (cancelled) return;
+      startCallOverlay(record.ticket_number, clinicName, `${record.id}:${record.updated}`);
+    }
 
-    const imagesSub = pb.collection("display_images").subscribe("*", () => {
-      loadImages();
-    });
+    async function connectDisplay() {
+      await ensurePocketBase();
+      if (cancelled) return;
+      await loadImages();
+      await loadQueue();
+      if (cancelled) return;
+
+      unsub.tickets = await pb.collection("tickets").subscribe("*", async (event) => {
+        await loadQueue();
+        if (event.action === "update") await announceCall(event.record);
+      });
+      unsub.images = await pb.collection("display_images").subscribe("*", () => {
+        loadImages();
+      });
+    }
+
+    connectDisplay();
 
     return () => {
+      cancelled = true;
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
-      Promise.resolve(ticketsSub).then((unsub) => (typeof unsub === "function" ? unsub() : pb.collection("tickets").unsubscribe("*"))).catch(() => {});
-      Promise.resolve(imagesSub).then((unsub) => (typeof unsub === "function" ? unsub() : pb.collection("display_images").unsubscribe("*"))).catch(() => {});
+      if (typeof unsub.tickets === "function") unsub.tickets();
+      else pb.collection("tickets").unsubscribe("*");
+      if (typeof unsub.images === "function") unsub.images();
+      else pb.collection("display_images").unsubscribe("*");
     };
   }, []);
 
@@ -114,8 +143,21 @@ export default function DisplayPage() {
     <main
       className="relative min-h-screen overflow-hidden bg-display font-sans text-white"
       dir="rtl"
-      onPointerDown={unlockAudio}
+      onPointerDown={enableSound}
     >
+      {!soundReady ? (
+        <button
+          type="button"
+          onClick={enableSound}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-display/95 p-8 text-center"
+        >
+          <BrandMark size="lg" className="mb-8" />
+          <p className="text-4xl font-black">تفعيل صوت النداء</p>
+          <p className="mt-4 max-w-xl text-xl text-sky-100">
+            اضغط هنا مرة واحدة حتى يشتغل صوت النداء من شاشة العرض.
+          </p>
+        </button>
+      ) : null}
       {isNewCall && current ? (
         <section className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-display p-6 text-center sm:p-10">
           <BrandMark size="md" className="mb-6" />
