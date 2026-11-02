@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Building2, DoorOpen, LogOut, Megaphone, RefreshCcw, Users } from 'lucide-react';
 import { callingFilter, ensurePocketBase, filterTicketsByDate, nowIso, pb, TICKET_STATUS, waitingFilter } from '@/lib/pb';
-import { playCallAnnouncement, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
+import { playReturningPatientSound, unlockAudio } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar } from '../ArchiveToolbar';
 import { BrandMark } from '../BrandMark';
@@ -141,8 +141,6 @@ export default function DoctorPage() {
       setCurrentTicket(updated);
       setWaitingTickets((tickets) => tickets.filter((ticket) => ticket.id !== nextTicket.id));
       setError('');
-      
-      playCallAnnouncement(updated.ticket_number, clinicName);
 
     } catch (err) {
       console.error('Error calling next patient:', err);
@@ -211,8 +209,6 @@ export default function DoctorPage() {
         status: TICKET_STATUS.calling,
       });
       setCurrentTicket(recalled);
-      
-      playCallAnnouncement(recalled.ticket_number, clinicName);
 
     } catch (err) {
       console.error('Error recalling patient:', err);
