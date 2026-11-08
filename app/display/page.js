@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
-import { isAudioUnlocked, playCallAnnouncement, unlockAudio } from "@/lib/sounds";
+import { bindCallSpeaker, playCallAnnouncement } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
 function useClock() {
@@ -23,13 +23,14 @@ export default function DisplayPage() {
   const [isNewCall, setIsNewCall] = useState(false);
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [soundReady, setSoundReady] = useState(false);
   const overlayTimer = useRef(null);
   const lastCallKey = useRef("");
+  const primed = useRef(false);
+  const speakerRef = useRef(null);
   const clock = useClock();
 
   const current = callingTickets[0] || null;
-  const hasQueue = callingTickets.length > 0 || waitingTickets.length > 0;
+  const showQueue = callingTickets.length > 0 || waitingTickets.length > 0;
   const currentImage = images[currentImageIndex] || null;
   const imageSrc = currentImage ? displayImageUrl(currentImage) : "";
 
@@ -44,26 +45,21 @@ export default function DisplayPage() {
     }
   }
 
-  async function loadQueue() {
-    try {
-      await ensurePocketBase();
-      const [calling, waiting] = await Promise.all([
-        pb.collection("tickets").getFullList({
-          filter: `status = "${TICKET_STATUS.calling}"`,
-          sort: "-updated",
-          expand: "clinic_id",
-        }),
-        pb.collection("tickets").getFullList({
-          filter: `status = "${TICKET_STATUS.waiting}"`,
-          sort: "created",
-          expand: "clinic_id",
-        }),
-      ]);
-      setCallingTickets(calling);
-      setWaitingTickets(waiting);
-    } catch (err) {
-      console.error("Error fetching display tickets:", err);
-    }
+  async function fetchQueue() {
+    await ensurePocketBase();
+    const [calling, waiting] = await Promise.all([
+      pb.collection("tickets").getFullList({
+        filter: `status = "${TICKET_STATUS.calling}"`,
+        sort: "-updated",
+        expand: "clinic_id",
+      }),
+      pb.collection("tickets").getFullList({
+        filter: `status = "${TICKET_STATUS.waiting}"`,
+        sort: "created",
+        expand: "clinic_id",
+      }),
+    ]);
+    return { calling, waiting };
   }
 
   function startCallOverlay(ticketNumber, clinicName, callKey) {
@@ -75,44 +71,55 @@ export default function DisplayPage() {
     overlayTimer.current = setTimeout(() => setIsNewCall(false), 30000);
   }
 
-  async function enableSound() {
-    const ok = await unlockAudio();
-    if (ok) setSoundReady(true);
+  async function announceCall(record) {
+    if (!record || record.status !== TICKET_STATUS.calling) return;
+    let clinicName = clinicNameOf(record) || "العيادة";
+    try {
+      const updatedTicket = await pb.collection("tickets").getOne(record.id, {
+        expand: "clinic_id",
+      });
+      clinicName = clinicNameOf(updatedTicket) || clinicName;
+    } catch (err) {
+      console.error("Error fetching expanded clinic info:", err);
+    }
+    startCallOverlay(record.ticket_number, clinicName, `${record.id}:${record.updated}`);
   }
 
   useEffect(() => {
-    if (isAudioUnlocked()) setSoundReady(true);
+    bindCallSpeaker(speakerRef.current);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     const unsub = { tickets: null, images: null };
 
-    async function announceCall(record) {
-      if (!record || record.status !== TICKET_STATUS.calling) return;
-      let clinicName = clinicNameOf(record) || "العيادة";
+    async function applyQueue(announce) {
       try {
-        const updatedTicket = await pb.collection("tickets").getOne(record.id, {
-          expand: "clinic_id",
-        });
-        clinicName = clinicNameOf(updatedTicket) || clinicName;
+        const { calling, waiting } = await fetchQueue();
+        if (cancelled) return;
+        setCallingTickets(calling);
+        setWaitingTickets(waiting);
+        const top = calling[0];
+        if (!primed.current) {
+          primed.current = true;
+          if (top) lastCallKey.current = `${top.id}:${top.updated}`;
+          return;
+        }
+        if (announce && top) await announceCall(top);
       } catch (err) {
-        console.error("Error fetching expanded clinic info:", err);
+        console.error("Error fetching display tickets:", err);
       }
-      if (cancelled) return;
-      startCallOverlay(record.ticket_number, clinicName, `${record.id}:${record.updated}`);
     }
 
     async function connectDisplay() {
       await ensurePocketBase();
       if (cancelled) return;
       await loadImages();
-      await loadQueue();
+      await applyQueue(false);
       if (cancelled) return;
 
-      unsub.tickets = await pb.collection("tickets").subscribe("*", async (event) => {
-        await loadQueue();
-        if (event.action === "update") await announceCall(event.record);
+      unsub.tickets = await pb.collection("tickets").subscribe("*", async () => {
+        await applyQueue(true);
       });
       unsub.images = await pb.collection("display_images").subscribe("*", () => {
         loadImages();
@@ -120,9 +127,11 @@ export default function DisplayPage() {
     }
 
     connectDisplay();
+    const poll = setInterval(() => applyQueue(true), 2500);
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
       if (typeof unsub.tickets === "function") unsub.tickets();
       else pb.collection("tickets").unsubscribe("*");
@@ -140,40 +149,11 @@ export default function DisplayPage() {
   }, [images]);
 
   return (
-    <main
-      className="relative min-h-screen overflow-hidden bg-display font-sans text-white"
-      dir="rtl"
-      onPointerDown={enableSound}
-    >
-      {!soundReady ? (
-        <button
-          type="button"
-          onClick={enableSound}
-          className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-display/95 p-8 text-center"
-        >
-          <BrandMark size="lg" className="mb-8" />
-          <p className="text-4xl font-black">تفعيل صوت النداء</p>
-          <p className="mt-4 max-w-xl text-xl text-sky-100">
-            اضغط هنا مرة واحدة حتى يشتغل صوت النداء من شاشة العرض.
-          </p>
-        </button>
-      ) : null}
-      {isNewCall && current ? (
-        <section className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-display p-6 text-center sm:p-10">
-          <BrandMark size="md" className="mb-6" />
-          <p className="text-3xl font-semibold text-sky-200 sm:text-4xl">نداء رقم جديد</p>
-          <p className="call-pulse my-6 text-[clamp(7rem,28vw,16rem)] leading-none font-black tracking-wide text-white">
-            {current.ticket_number}
-          </p>
-          <p className="rounded-3xl bg-sky-700 px-8 py-5 text-3xl font-bold sm:px-10 sm:text-5xl">
-            الرجاء التوجه إلى {clinicNameOf(current)}
-          </p>
-        </section>
-      ) : null}
-
-      <div className={`flex min-h-screen ${hasQueue && !isNewCall ? "flex-col lg:flex-row" : "flex-col"}`}>
-        {hasQueue && !isNewCall ? (
-          <aside className="flex min-h-[40vh] w-full flex-col border-sky-900/60 bg-[#143140] p-5 lg:min-h-screen lg:w-1/3 lg:border-l">
+    <main className="h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
+      <audio ref={speakerRef} playsInline preload="auto" className="hidden" />
+      <div className="flex h-full w-full flex-row">
+        {showQueue ? (
+          <aside className="flex h-full w-[34%] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l">
             <header className="mb-5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <BrandMark size="sm" />
@@ -218,27 +198,29 @@ export default function DisplayPage() {
           </aside>
         ) : null}
 
-        <section className={`relative min-h-screen overflow-hidden bg-black ${hasQueue && !isNewCall ? "w-full lg:w-2/3" : "w-full"}`}>
+        <section className="relative h-full min-w-0 flex-1 overflow-hidden bg-black">
           {imageSrc ? (
-            <>
-              <img
-                src={imageSrc}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-              <div className="pointer-events-none absolute top-5 start-5 z-10">
-                <BrandMark size="sm" />
-              </div>
-            </>
+            <img src={imageSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full min-h-screen flex-col items-center justify-center bg-gradient-to-br from-display via-sky-900 to-[#0b1c24] p-10 text-center">
-              <BrandMark size="lg" className="mb-8" />
+            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-display via-sky-900 to-[#0b1c24] p-10 text-center">
               <p className="text-4xl font-black">مجمع انوار خيبر الطبي العام</p>
               <p className="mt-4 max-w-2xl text-xl text-sky-100">
                 أضف صوراً توعوية من صفحة إدارة الصور حتى تظهر هنا على الشاشة.
               </p>
             </div>
           )}
+
+          {isNewCall && current ? (
+            <section className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-display/92 p-6 text-center sm:p-10">
+              <p className="text-3xl font-semibold text-sky-200 sm:text-4xl">نداء رقم جديد</p>
+              <p className="call-pulse my-6 text-[clamp(7rem,22vw,16rem)] leading-none font-black tracking-wide text-white">
+                {current.ticket_number}
+              </p>
+              <p className="rounded-3xl bg-sky-700 px-8 py-5 text-3xl font-bold sm:px-10 sm:text-5xl">
+                الرجاء التوجه إلى {clinicNameOf(current)}
+              </p>
+            </section>
+          ) : null}
         </section>
       </div>
     </main>
