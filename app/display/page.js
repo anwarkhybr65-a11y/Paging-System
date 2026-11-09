@@ -232,7 +232,7 @@ export default function DisplayPage() {
             <img
               src={imageSrc}
               alt=""
-              className={`absolute inset-0 h-full w-full object-center ${showQueue ? "object-contain" : "object-cover"}`}
+              className="absolute inset-0 h-full w-full object-cover object-center"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-display via-sky-900 to-[#0b1c24] p-10 text-center">

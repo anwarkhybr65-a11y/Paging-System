@@ -92,7 +92,7 @@ export default function MediaPage() {
             إضافة صورة جديدة
           </h2>
           <p className="mb-4 text-sm text-warm">
-            الصورة تظهر كاملة مع قائمة الانتظار، وتتمدد على باقي الشاشة إذا لم تكن القائمة ظاهرة.
+            الصورة تملأ المساحة المتاحة مع الحفاظ على شكلها، سواء كانت قائمة الانتظار ظاهرة أو لا.
           </p>
           <label className="mb-4 block text-right font-semibold text-ink">
             ملف الصورة
