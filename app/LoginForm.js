@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LockKeyhole, UserRound } from "lucide-react";
+import { ChevronDown, LockKeyhole, UserRound } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "./AuthProvider";
-import { homeForRole } from "@/lib/auth";
+import { accountLoginLabel, homeForRole, sortLoginAccounts, STAFF_COLLECTION } from "@/lib/auth";
+import { ensurePocketBase, pb } from "@/lib/pb";
 
 export function LoginForm() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [accounts, setAccounts] = useState([]);
+  const [accountsReady, setAccountsReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,9 +24,33 @@ export function LoginForm() {
     }
   }, [user, loading, router]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAccounts() {
+      try {
+        await ensurePocketBase();
+        const records = await pb.collection(STAFF_COLLECTION).getFullList({
+          fields: "id,username,name,role",
+          sort: "name",
+        });
+        if (!cancelled) setAccounts(sortLoginAccounts(records.filter((record) => record.username)));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setAccountsReady(true);
+      }
+    }
+
+    loadAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleSubmit(event) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !username) return;
     try {
       setBusy(true);
       setError("");
@@ -61,7 +88,7 @@ export function LoginForm() {
         <p className="mb-3 text-sm font-semibold tracking-wide text-sky-700">مجمع انوار خيبر الطبي العام</p>
         <h1 className="text-4xl font-black tracking-tight text-ink">تسجيل الدخول</h1>
         <p className="mt-3 text-base leading-7 text-warm">
-          أدخل حسابك ليتم توجيهك تلقائياً إلى الشاشة الخاصة بدورك.
+          اختر حسابك ثم أدخل كلمة المرور ليتم توجيهك إلى الشاشة الخاصة بدورك.
         </p>
 
         <form
@@ -72,14 +99,25 @@ export function LoginForm() {
             <UserRound size={18} />
             اسم المستخدم
           </label>
-          <input
-            className="mb-5 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3.5 outline-none transition focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete="username"
-            dir="ltr"
-            required
-          />
+          <div className="relative mb-5">
+            <select
+              className="w-full appearance-none rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3.5 pl-11 outline-none transition focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100 disabled:opacity-60"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              disabled={!accountsReady || accounts.length === 0}
+            >
+              <option value="">
+                {!accountsReady ? "جاري تحميل الحسابات..." : accounts.length ? "اختر الحساب" : "تعذر تحميل الحسابات"}
+              </option>
+              {accounts.map((account) => (
+                <option key={account.id || account.username} value={account.username}>
+                  {accountLoginLabel(account)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-warm" />
+          </div>
 
           <label className="mb-2 flex items-center gap-2 font-semibold text-warm">
             <LockKeyhole size={18} />
@@ -99,7 +137,7 @@ export function LoginForm() {
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !username}
             className="w-full rounded-2xl bg-sky-600 py-4 text-xl font-black text-white shadow-[0_10px_24px_rgba(52,126,160,0.28)] transition hover:bg-sky-700 disabled:opacity-60"
           >
             {busy ? "جاري الدخول..." : "دخول"}

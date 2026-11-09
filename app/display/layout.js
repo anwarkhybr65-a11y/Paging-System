@@ -1,4 +1,5 @@
 import { RequireRole } from "../RequireRole";
+import { ROLES } from "@/lib/auth";
 
 export const metadata = {
   title: "شاشة العرض",
@@ -6,7 +7,7 @@ export const metadata = {
 
 export default function DisplayLayout({ children }) {
   return (
-    <RequireRole allow={["admin"]} allowPublic>
+    <RequireRole allow={[ROLES.admin, ROLES.display]} allowPublic>
       {children}
     </RequireRole>
   );

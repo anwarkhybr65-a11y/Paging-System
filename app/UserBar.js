@@ -23,6 +23,14 @@ export function UserBar() {
           لوحة الإدارة
         </Link>
       ) : null}
+      {user.role === ROLES.display && pathname !== "/screens" ? (
+        <Link
+          href="/screens"
+          className="rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800 transition hover:bg-sky-100"
+        >
+          لوحة الشاشات
+        </Link>
+      ) : null}
       <span className="rounded-full bg-paper px-4 py-2 text-sm font-bold text-ink shadow-sm ring-1 ring-sky-100">
         {user.name || user.username} · {ROLE_LABELS[user.role] || user.role}
       </span>

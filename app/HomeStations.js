@@ -35,16 +35,18 @@ const stations = [
   },
 ];
 
-export function HomeStations() {
+export function HomeStations({ only } = {}) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setReady(true);
   }, []);
 
+  const items = only ? stations.filter((station) => only.includes(station.href)) : stations;
+
   return (
-    <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-      {stations.map((station) => {
+    <div className={`mt-10 grid gap-5 md:grid-cols-2 ${items.length > 2 ? "lg:grid-cols-4" : ""}`}>
+      {items.map((station) => {
         const Icon = station.icon;
         return (
           <Link
