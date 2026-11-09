@@ -227,13 +227,9 @@ export default function DisplayPage() {
           </aside>
         ) : null}
 
-        <section className="relative h-full min-w-0 flex-1 overflow-hidden bg-black">
+        <section className="relative flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden bg-black">
           {imageSrc ? (
-            <img
-              src={imageSrc}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover object-center"
-            />
+            <img src={imageSrc} alt="" className="h-full w-full object-contain object-center" />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-display via-sky-900 to-[#0b1c24] p-10 text-center">
               <p className="text-4xl font-black">مجمع انوار خيبر الطبي العام</p>

@@ -92,7 +92,7 @@ export default function MediaPage() {
             إضافة صورة جديدة
           </h2>
           <p className="mb-4 text-sm text-warm">
-            الصورة تملأ المساحة المتاحة مع الحفاظ على شكلها، سواء كانت قائمة الانتظار ظاهرة أو لا.
+            الصورة تظهر كاملة وتكبر حتى تملأ المساحة المتاحة، من غير قص أو تغيير شكلها.
           </p>
           <label className="mb-4 block text-right font-semibold text-ink">
             ملف الصورة
