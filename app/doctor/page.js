@@ -54,6 +54,21 @@ export default function DoctorPage() {
   useEffect(() => {
     if (!selectedClinic) return;
     let cancelled = false;
+    let unsubTickets = null;
+
+    function isWaitingStatus(status) {
+      return String(status || "").trim() === "waiting";
+    }
+
+    function maybePlayReturning(ticket) {
+      if (!ticket || ticket.clinic_id !== selectedClinic) return;
+      if (!isWaitingStatus(ticket.status)) return;
+      const known = knownWaitingIds.current;
+      if (!known) return;
+      if (known.has(ticket.id)) return;
+      known.add(ticket.id);
+      playReturningPatientSound();
+    }
 
     async function refreshQueue() {
       try {
@@ -74,9 +89,14 @@ export default function DoctorPage() {
         if (cancelled) return;
 
         const previousIds = knownWaitingIds.current;
-        knownWaitingIds.current = new Set(waiting.map((ticket) => ticket.id));
-        if (previousIds && waiting.some((ticket) => !previousIds.has(ticket.id))) {
-          playReturningPatientSound();
+        const nextIds = new Set(waiting.map((ticket) => ticket.id));
+        if (!previousIds) {
+          knownWaitingIds.current = nextIds;
+        } else {
+          waiting.forEach((ticket) => {
+            if (!previousIds.has(ticket.id)) maybePlayReturning(ticket);
+          });
+          knownWaitingIds.current = nextIds;
         }
 
         setWaitingTickets(waiting);
@@ -89,17 +109,25 @@ export default function DoctorPage() {
       }
     }
 
-    refreshQueue();
+    async function connectQueue() {
+      await ensurePocketBase();
+      if (cancelled) return;
+      await refreshQueue();
+      if (cancelled) return;
+      unsubTickets = await pb.collection('tickets').subscribe('*', async (event) => {
+        maybePlayReturning(event?.record);
+        await refreshQueue();
+      });
+    }
+
+    connectQueue();
     const timer = setInterval(refreshQueue, 2000);
-    const subscription = pb.collection('tickets').subscribe('*', refreshQueue);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
-      Promise.resolve(subscription).then((unsub) => {
-        if (typeof unsub === 'function') unsub();
-        else pb.collection('tickets').unsubscribe('*');
-      }).catch(() => {});
+      if (typeof unsubTickets === 'function') unsubTickets();
+      else pb.collection('tickets').unsubscribe('*');
     };
   }, [selectedClinic]);
 
@@ -219,7 +247,7 @@ export default function DoctorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl">
+    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl" onPointerDown={unlockAudio}>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <div className="w-full rounded-[32px] bg-paper p-6 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-3">
