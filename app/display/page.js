@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
-import { bindCallSpeaker, playCallAnnouncement } from "@/lib/sounds";
+import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
 function useClock() {
@@ -27,7 +27,6 @@ export default function DisplayPage() {
   const lastCallKey = useRef("");
   const lastAnnouncedId = useRef("");
   const primed = useRef(false);
-  const speakerRef = useRef(null);
   const clock = useClock();
 
   const current = callingTickets[0] || null;
@@ -98,7 +97,20 @@ export default function DisplayPage() {
   }
 
   useEffect(() => {
-    bindCallSpeaker(speakerRef.current);
+    const arm = () => {
+      unlockAudio();
+    };
+    arm();
+    window.addEventListener("pointerdown", arm);
+    window.addEventListener("keydown", arm);
+    window.addEventListener("touchstart", arm);
+    const timer = setInterval(arm, 3000);
+    return () => {
+      window.removeEventListener("pointerdown", arm);
+      window.removeEventListener("keydown", arm);
+      window.removeEventListener("touchstart", arm);
+      clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -165,7 +177,6 @@ export default function DisplayPage() {
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
-      <audio ref={speakerRef} playsInline preload="auto" className="hidden" />
       <div className="flex h-full w-full flex-row">
         {showQueue ? (
           <aside className="flex h-full w-[34%] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l">
