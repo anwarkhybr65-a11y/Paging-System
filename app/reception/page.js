@@ -7,6 +7,8 @@ import {
   doctorNameOf,
   ensurePocketBase,
   filterTicketsByDate,
+  todayDateKey,
+  ticketsOnLocalDate,
   pb,
   pickNextDailyNumber,
   ticketStatusLabel,
@@ -15,7 +17,7 @@ import {
 } from '@/lib/pb';
 import { PrintTicket } from './PrintTicket';
 import { TicketStats, TicketsFlowTable } from '../TicketsFlowTable';
-import { ArchiveToolbar } from '../ArchiveToolbar';
+import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 
 function pocketbaseErrorMessage(err) {
   const fields = err?.data?.data || err?.response?.data || {};
@@ -37,7 +39,7 @@ export default function ReceptionPage() {
   const [tickets, setTickets] = useState([]);
   const [busy, setBusy] = useState(false);
   const [savingNoteId, setSavingNoteId] = useState('');
-  const [archiveDate, setArchiveDate] = useState('');
+  const [archiveDate, setArchiveDate] = useWorkDay();
 
   useEffect(() => {
     async function fetchClinics() {
@@ -140,8 +142,9 @@ export default function ReceptionPage() {
     });
   }, [selectedClinic, doctors]);
 
-  const archivedTickets = filterTicketsByDate(tickets, archiveDate);
+  const archivedTickets = filterTicketsByDate(tickets, archiveDate || todayDateKey());
   const clinicTickets = archivedTickets.filter((ticket) => ticket.clinic_id === selectedClinic);
+  const liveTickets = ticketsOnLocalDate(tickets);
   const nextNumber = selectedClinic
     ? pickNextDailyNumber(tickets.filter((ticket) => ticket.clinic_id === selectedClinic))
     : null;
@@ -431,7 +434,7 @@ export default function ReceptionPage() {
 
             <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {clinics.map((clinic) => {
-                const rows = tickets.filter((ticket) => ticket.clinic_id === clinic.id);
+                const rows = liveTickets.filter((ticket) => ticket.clinic_id === clinic.id);
                 const current = rows.find((ticket) => ticket.status === TICKET_STATUS.calling);
                 const waitingCount = rows.filter((ticket) => ticket.status === TICKET_STATUS.waiting).length;
                 return (

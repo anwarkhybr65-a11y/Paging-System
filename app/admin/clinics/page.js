@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2 } from "lucide-react";
+import { Building2, Trash2 } from "lucide-react";
 import { ensurePocketBase, pb } from "@/lib/pb";
 import { BrandMark } from "../../BrandMark";
 import { UserBar } from "../../UserBar";
@@ -12,6 +12,7 @@ export default function AdminClinicsPage() {
   const [clinics, setClinics] = useState([]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -64,6 +65,34 @@ export default function AdminClinicsPage() {
     }
   }
 
+  async function handleDelete(clinic) {
+    if (!clinic?.id || deletingId || busy) return;
+    const clinicName = clinic.name || "هذه العيادة";
+    if (!window.confirm(`هل تريد حذف العيادة «${clinicName}»؟ ستختفي من الاستقبال ولوحة الطبيب وشاشة العرض.`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(clinic.id);
+      setMessage("");
+      await ensurePocketBase();
+      const relatedDoctors = await pb.collection("doctors").getFullList({
+        filter: `clinic = "${clinic.id}"`,
+      });
+      await Promise.all(
+        relatedDoctors.map((doctor) => pb.collection("doctors").delete(doctor.id)),
+      );
+      await pb.collection("clinics").delete(clinic.id);
+      setClinics((items) => items.filter((item) => item.id !== clinic.id));
+      setMessage(`تم حذف العيادة: ${clinicName}`);
+    } catch (err) {
+      console.error(err);
+      setMessage(err?.message || "تعذر حذف العيادة");
+    } finally {
+      setDeletingId("");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -74,8 +103,8 @@ export default function AdminClinicsPage() {
               <Building2 size={24} strokeWidth={1.8} />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-ink sm:text-3xl">إضافة عيادة</h1>
-              <p className="mt-1 text-sm text-warm">أضف عيادة أو قسماً جديداً ليظهر في الاستقبال ولوحة الطبيب وشاشة العرض.</p>
+              <h1 className="text-2xl font-black text-ink sm:text-3xl">إدارة العيادات</h1>
+              <p className="mt-1 text-sm text-warm">أضف عيادة أو قسماً جديداً، أو احذف عيادة لم تعد مستخدمة لتختفي من كل الشاشات.</p>
             </div>
           </div>
           <UserBar />
@@ -112,8 +141,20 @@ export default function AdminClinicsPage() {
           ) : null}
           <ul className="space-y-2">
             {clinics.map((clinic) => (
-              <li key={clinic.id} className="rounded-2xl bg-sky-50 px-4 py-3 font-bold text-ink ring-1 ring-sky-100">
-                {clinic.name}
+              <li
+                key={clinic.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-sky-50 px-4 py-3 font-bold text-ink ring-1 ring-sky-100"
+              >
+                <span>{clinic.name}</span>
+                <button
+                  type="button"
+                  disabled={Boolean(deletingId) || busy}
+                  onClick={() => handleDelete(clinic)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-3 py-2 text-sm font-bold text-white transition hover:bg-black disabled:opacity-60"
+                >
+                  <Trash2 size={16} />
+                  {deletingId === clinic.id ? "جاري الحذف..." : "حذف"}
+                </button>
               </li>
             ))}
           </ul>

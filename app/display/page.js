@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
-import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, TICKET_STATUS } from "@/lib/pb";
+import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, ticketsOnLocalDate, TICKET_STATUS } from "@/lib/pb";
 import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
@@ -59,7 +59,10 @@ export default function DisplayPage() {
         expand: "clinic_id",
       }),
     ]);
-    return { calling, waiting };
+    return {
+      calling: ticketsOnLocalDate(calling),
+      waiting: ticketsOnLocalDate(waiting),
+    };
   }
 
   function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {

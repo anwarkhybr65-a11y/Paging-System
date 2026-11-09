@@ -72,7 +72,7 @@ export function TicketsFlowTable({
             {tickets.length === 0 ? (
               <tr>
                 <td colSpan={notesEditable ? 11 : 10} className="px-3 py-10 text-center text-warm">
-                  لا توجد حالات بعد
+                  لا توجد حالات في هذا اليوم
                 </td>
               </tr>
             ) : (

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Archive } from "lucide-react";
 import { ensurePocketBase, filterTicketsByDate, pb } from "@/lib/pb";
-import { ArchiveToolbar } from "../../ArchiveToolbar";
+import { ArchiveToolbar, useWorkDay } from "../../ArchiveToolbar";
 import { TicketStats, TicketsFlowTable } from "../../TicketsFlowTable";
 import { BrandMark } from "../../BrandMark";
 import { UserBar } from "../../UserBar";
@@ -11,7 +11,7 @@ import { UserBar } from "../../UserBar";
 export default function AdminArchivePage() {
   const [clinics, setClinics] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [archiveDate, setArchiveDate] = useState("");
+  const [archiveDate, setArchiveDate] = useWorkDay();
 
   useEffect(() => {
     async function loadClinics() {
@@ -77,7 +77,7 @@ export default function AdminArchivePage() {
         </div>
 
         <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
-          <ArchiveToolbar date={archiveDate} onChange={setArchiveDate} />
+          <ArchiveToolbar date={archiveDate} onChange={setArchiveDate} showAll />
           <TicketsFlowTable tickets={archivedTickets} clinics={clinics} showStats={false} />
         </section>
 

@@ -1,10 +1,21 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Building2, DoorOpen, LogOut, Megaphone, RefreshCcw, Users } from 'lucide-react';
-import { callingFilter, ensurePocketBase, filterTicketsByDate, nowIso, pb, TICKET_STATUS, waitingFilter } from '@/lib/pb';
+import {
+  callingFilter,
+  ensurePocketBase,
+  filterTicketsByDate,
+  localDateKey,
+  nowIso,
+  pb,
+  ticketsOnLocalDate,
+  todayDateKey,
+  TICKET_STATUS,
+  waitingFilter,
+} from '@/lib/pb';
 import { playReturningPatientSound, unlockAudio } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
-import { ArchiveToolbar } from '../ArchiveToolbar';
+import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 import { BrandMark } from '../BrandMark';
 import { UserBar } from '../UserBar';
 import { useAuth } from '../AuthProvider';
@@ -19,7 +30,7 @@ export default function DoctorPage() {
   const [clinicTickets, setClinicTickets] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [archiveDate, setArchiveDate] = useState('');
+  const [archiveDate, setArchiveDate] = useWorkDay();
   const knownWaitingIds = useRef(null);
   const assignedClinic = user?.clinic || '';
   const clinicLocked = user?.role === ROLES.doctor && Boolean(assignedClinic);
@@ -63,6 +74,7 @@ export default function DoctorPage() {
     function maybePlayReturning(ticket) {
       if (!ticket || ticket.clinic_id !== selectedClinic) return;
       if (!isWaitingStatus(ticket.status)) return;
+      if (localDateKey(ticket.created) !== todayDateKey()) return;
       const known = knownWaitingIds.current;
       if (!known) return;
       if (known.has(ticket.id)) return;
@@ -88,19 +100,21 @@ export default function DoctorPage() {
         });
         if (cancelled) return;
 
+        const waitingToday = ticketsOnLocalDate(waiting);
+        const callingToday = ticketsOnLocalDate(calling.items);
         const previousIds = knownWaitingIds.current;
-        const nextIds = new Set(waiting.map((ticket) => ticket.id));
+        const nextIds = new Set(waitingToday.map((ticket) => ticket.id));
         if (!previousIds) {
           knownWaitingIds.current = nextIds;
         } else {
-          waiting.forEach((ticket) => {
+          waitingToday.forEach((ticket) => {
             if (!previousIds.has(ticket.id)) maybePlayReturning(ticket);
           });
           knownWaitingIds.current = nextIds;
         }
 
-        setWaitingTickets(waiting);
-        setCurrentTicket(calling.items[0] || null);
+        setWaitingTickets(waitingToday);
+        setCurrentTicket(callingToday[0] || null);
         setClinicTickets(clinicRows);
         setError('');
       } catch (err) {
@@ -138,17 +152,18 @@ export default function DoctorPage() {
 
     try {
       setBusy(true);
-      const waitingTicketsPage = await pb.collection('tickets').getList(1, 1, {
+      const waitingTicketsPage = await pb.collection('tickets').getFullList({
         filter: waitingFilter(selectedClinic),
         sort: 'created',
       });
+      const todayWaiting = ticketsOnLocalDate(waitingTicketsPage);
 
-      if (waitingTicketsPage.items.length === 0) {
+      if (todayWaiting.length === 0) {
         alert('لا توجد تذاكر في قائمة الانتظار لهذه العيادة');
         return;
       }
 
-      const nextTicket = waitingTicketsPage.items[0];
+      const nextTicket = todayWaiting[0];
       const currentCalling = await pb.collection('tickets').getFullList({
         filter: callingFilter(selectedClinic),
       });
@@ -365,7 +380,7 @@ export default function DoctorPage() {
       <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
         <h2 className="mb-4 text-xl font-black text-ink">جدول دخول وخروج المرضى</h2>
         <ArchiveToolbar date={archiveDate} onChange={setArchiveDate} />
-        <TicketsFlowTable tickets={filterTicketsByDate(clinicTickets, archiveDate)} clinics={clinics} />
+        <TicketsFlowTable tickets={filterTicketsByDate(clinicTickets, archiveDate || todayDateKey())} clinics={clinics} />
       </section>
       </div>
     </div>
