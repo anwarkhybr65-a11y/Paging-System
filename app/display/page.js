@@ -25,6 +25,7 @@ export default function DisplayPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const overlayTimer = useRef(null);
   const lastCallKey = useRef("");
+  const lastAnnouncedId = useRef("");
   const primed = useRef(false);
   const speakerRef = useRef(null);
   const clock = useClock();
@@ -62,9 +63,10 @@ export default function DisplayPage() {
     return { calling, waiting };
   }
 
-  function startCallOverlay(ticketNumber, clinicName, callKey) {
+  function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
     if (callKey && lastCallKey.current === callKey) return;
     if (callKey) lastCallKey.current = callKey;
+    if (ticketId) lastAnnouncedId.current = ticketId;
     setIsNewCall(true);
     playCallAnnouncement(ticketNumber, clinicName);
     if (overlayTimer.current) clearTimeout(overlayTimer.current);
@@ -73,16 +75,26 @@ export default function DisplayPage() {
 
   async function announceCall(record) {
     if (!record || record.status !== TICKET_STATUS.calling) return;
+    const callKey = `${record.id}:${record.updated}`;
+    if (lastCallKey.current === callKey) return;
+    if (record.entered_at && record.id === lastAnnouncedId.current) {
+      lastCallKey.current = callKey;
+      return;
+    }
     let clinicName = clinicNameOf(record) || "العيادة";
     try {
       const updatedTicket = await pb.collection("tickets").getOne(record.id, {
         expand: "clinic_id",
       });
       clinicName = clinicNameOf(updatedTicket) || clinicName;
+      if (updatedTicket.entered_at && updatedTicket.id === lastAnnouncedId.current) {
+        lastCallKey.current = `${updatedTicket.id}:${updatedTicket.updated}`;
+        return;
+      }
     } catch (err) {
       console.error("Error fetching expanded clinic info:", err);
     }
-    startCallOverlay(record.ticket_number, clinicName, `${record.id}:${record.updated}`);
+    startCallOverlay(record.ticket_number, clinicName, callKey, record.id);
   }
 
   useEffect(() => {
@@ -102,7 +114,10 @@ export default function DisplayPage() {
         const top = calling[0];
         if (!primed.current) {
           primed.current = true;
-          if (top) lastCallKey.current = `${top.id}:${top.updated}`;
+          if (top) {
+            lastCallKey.current = `${top.id}:${top.updated}`;
+            lastAnnouncedId.current = top.id;
+          }
           return;
         }
         if (announce && top) await announceCall(top);
