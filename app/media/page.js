@@ -92,7 +92,7 @@ export default function MediaPage() {
             إضافة صورة جديدة
           </h2>
           <p className="mb-4 text-sm text-warm">
-            الصورة تظهر على شاشة العرض. إذا لم يكن هناك رقم في الانتظار تغطي الشاشة كاملة، وإذا وُجد نداء تأخذ ثلثي الشاشة.
+            الصورة تظهر كاملة مع قائمة الانتظار، وتتمدد على باقي الشاشة إذا لم تكن القائمة ظاهرة.
           </p>
           <label className="mb-4 block text-right font-semibold text-ink">
             ملف الصورة
