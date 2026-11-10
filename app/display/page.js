@@ -28,6 +28,7 @@ export default function DisplayPage() {
   const overlayToken = useRef(0);
   const callQueue = useRef(Promise.resolve());
   const announcedKeys = useRef(new Set());
+  const pendingKeys = useRef(new Set());
   const lastCallKey = useRef("");
   const lastAnnouncedId = useRef("");
   const announcedCalledAt = useRef(new Map());
@@ -78,12 +79,8 @@ export default function DisplayPage() {
   }
 
   function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
-    if (callKey && announcedKeys.current.has(callKey)) return;
-    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    if (callKey) {
-      announcedKeys.current.add(callKey);
-      lastCallKey.current = callKey;
-    }
+    if (callKey && (announcedKeys.current.has(callKey) || pendingKeys.current.has(callKey))) return;
+    if (callKey) pendingKeys.current.add(callKey);
     if (ticketId) lastAnnouncedId.current = ticketId;
 
     callQueue.current = callQueue.current
@@ -92,10 +89,16 @@ export default function DisplayPage() {
         setOverlayCall({ ticketNumber, clinicName });
         setIsNewCall(true);
         if (overlayTimer.current) clearTimeout(overlayTimer.current);
+        let played = false;
         try {
-          await playCallAnnouncement(ticketNumber, clinicName);
+          played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
         } catch (err) {
           console.error("Error playing call announcement:", err);
+        }
+        if (callKey) pendingKeys.current.delete(callKey);
+        if (played && callKey) {
+          announcedKeys.current.add(callKey);
+          lastCallKey.current = callKey;
         }
         if (overlayToken.current !== token) return;
         overlayTimer.current = setTimeout(() => {
@@ -105,6 +108,7 @@ export default function DisplayPage() {
         }, 30000);
       })
       .catch((err) => {
+        if (callKey) pendingKeys.current.delete(callKey);
         console.error("Error queueing call announcement:", err);
       });
   }
