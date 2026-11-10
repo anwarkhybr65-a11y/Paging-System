@@ -21,12 +21,22 @@ export default function DisplayPage() {
   const [callingTickets, setCallingTickets] = useState([]);
   const [waitingTickets, setWaitingTickets] = useState([]);
   const [isNewCall, setIsNewCall] = useState(false);
+  const [overlayCall, setOverlayCall] = useState(null);
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const overlayTimer = useRef(null);
   const lastCallKey = useRef("");
   const lastAnnouncedId = useRef("");
+  const announcedCalledAt = useRef(new Map());
+  const latestUpdate = useRef("");
   const primed = useRef(false);
+
+  function noteUpdate(updated) {
+    if (!updated) return;
+    if (!latestUpdate.current || new Date(updated).getTime() > new Date(latestUpdate.current).getTime()) {
+      latestUpdate.current = updated;
+    }
+  }
   const clock = useClock();
 
   const current = callingTickets[0] || null;
@@ -69,33 +79,46 @@ export default function DisplayPage() {
     if (callKey && lastCallKey.current === callKey) return;
     if (callKey) lastCallKey.current = callKey;
     if (ticketId) lastAnnouncedId.current = ticketId;
+    setOverlayCall({ ticketNumber, clinicName });
     setIsNewCall(true);
     playCallAnnouncement(ticketNumber, clinicName);
     if (overlayTimer.current) clearTimeout(overlayTimer.current);
-    overlayTimer.current = setTimeout(() => setIsNewCall(false), 30000);
+    overlayTimer.current = setTimeout(() => {
+      setIsNewCall(false);
+      setOverlayCall(null);
+    }, 30000);
+  }
+
+  function isEntryUpdate(record, calledAt) {
+    const previousCalledAt = announcedCalledAt.current.get(record.id) || "";
+    return Boolean(record.entered_at) && record.id === lastAnnouncedId.current && previousCalledAt === (calledAt || "");
   }
 
   async function announceCall(record) {
     if (!record || record.status !== TICKET_STATUS.calling) return;
-    const callKey = `${record.id}:${record.updated}`;
+    noteUpdate(record.updated);
+    const callKey = `${record.id}:${record.called_at || record.updated}`;
     if (lastCallKey.current === callKey) return;
-    if (record.entered_at && record.id === lastAnnouncedId.current) {
+    if (isEntryUpdate(record, record.called_at)) {
       lastCallKey.current = callKey;
       return;
     }
     let clinicName = clinicNameOf(record) || "العيادة";
+    let calledAt = record.called_at || "";
     try {
       const updatedTicket = await pb.collection("tickets").getOne(record.id, {
         expand: "clinic_id",
       });
       clinicName = clinicNameOf(updatedTicket) || clinicName;
-      if (updatedTicket.entered_at && updatedTicket.id === lastAnnouncedId.current) {
-        lastCallKey.current = `${updatedTicket.id}:${updatedTicket.updated}`;
+      calledAt = updatedTicket.called_at || calledAt;
+      if (isEntryUpdate(updatedTicket, calledAt)) {
+        lastCallKey.current = callKey;
         return;
       }
     } catch (err) {
       console.error("Error fetching expanded clinic info:", err);
     }
+    announcedCalledAt.current.set(record.id, calledAt);
     startCallOverlay(record.ticket_number, clinicName, callKey, record.id);
   }
 
@@ -130,12 +153,16 @@ export default function DisplayPage() {
         if (!primed.current) {
           primed.current = true;
           if (top) {
-            lastCallKey.current = `${top.id}:${top.updated}`;
+            lastCallKey.current = `${top.id}:${top.called_at || top.updated}`;
             lastAnnouncedId.current = top.id;
+            announcedCalledAt.current.set(top.id, top.called_at || "");
+            noteUpdate(top.updated);
           }
           return;
         }
-        if (announce && top) await announceCall(top);
+        if (announce && top && (!latestUpdate.current || new Date(top.updated).getTime() > new Date(latestUpdate.current).getTime())) {
+          await announceCall(top);
+        }
       } catch (err) {
         console.error("Error fetching display tickets:", err);
       }
@@ -148,8 +175,10 @@ export default function DisplayPage() {
       await applyQueue(false);
       if (cancelled) return;
 
-      unsub.tickets = await pb.collection("tickets").subscribe("*", async () => {
-        await applyQueue(true);
+      unsub.tickets = await pb.collection("tickets").subscribe("*", async (event) => {
+        const record = event?.record;
+        if (record?.status === TICKET_STATUS.calling) await announceCall(record);
+        await applyQueue(false);
       });
       unsub.images = await pb.collection("display_images").subscribe("*", () => {
         loadImages();
@@ -239,14 +268,14 @@ export default function DisplayPage() {
             </div>
           )}
 
-          {isNewCall && current ? (
+          {isNewCall && overlayCall ? (
             <section className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-display/92 p-6 text-center sm:p-10">
               <p className="text-3xl font-semibold text-sky-200 sm:text-4xl">نداء رقم جديد</p>
               <p className="call-pulse my-6 text-[clamp(7rem,22vw,16rem)] leading-none font-black tracking-wide text-white">
-                {current.ticket_number}
+                {overlayCall.ticketNumber}
               </p>
               <p className="rounded-3xl bg-sky-700 px-8 py-5 text-3xl font-bold sm:px-10 sm:text-5xl">
-                الرجاء التوجه إلى {clinicNameOf(current)}
+                الرجاء التوجه إلى {overlayCall.clinicName}
               </p>
             </section>
           ) : null}

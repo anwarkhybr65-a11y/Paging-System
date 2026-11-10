@@ -5,6 +5,7 @@ import {
   callingFilter,
   ensurePocketBase,
   filterTicketsByDate,
+  formatDateTime,
   localDateKey,
   nowIso,
   pb,
@@ -207,6 +208,15 @@ export default function DoctorPage() {
   };
 
   const selectedWaiting = waitingTickets.find((ticket) => ticket.id === selectedWaitingId) || waitingTickets[0];
+  const calledTickets = clinicTickets
+    .filter(
+      (ticket) =>
+        ticket.called_at &&
+        localDateKey(ticket.created) === todayDateKey() &&
+        ticket.status !== TICKET_STATUS.waiting &&
+        ticket.status !== TICKET_STATUS.reserved,
+    )
+    .sort((left, right) => new Date(right.called_at) - new Date(left.called_at));
 
   const handleEnterClinic = async () => {
     if (!currentTicket?.id || busy) {
@@ -255,19 +265,32 @@ export default function DoctorPage() {
     }
   };
 
-  const handleRecall = async () => {
-    if (!currentTicket?.id || busy) {
-      alert('لا يوجد رقم حالي لإعادة ندائه');
+  const handleRecall = async (ticket) => {
+    const target = ticket?.id ? ticket : currentTicket;
+    if (!target?.id || busy) {
+      alert('لا يوجد رقم لإعادة ندائه');
       return;
     }
 
+    const previousStatus = target.status;
+    const keepAsCurrent = !previousStatus || previousStatus === TICKET_STATUS.calling;
+
     try {
       setBusy(true);
-      const recalled = await pb.collection('tickets').update(currentTicket.id, {
+      await ensurePocketBase();
+      const recalled = await pb.collection('tickets').update(target.id, {
         status: TICKET_STATUS.calling,
+        called_at: nowIso(),
       });
-      setCurrentTicket(recalled);
-
+      if (keepAsCurrent) {
+        setCurrentTicket(recalled);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        await pb.collection('tickets').update(target.id, {
+          status: previousStatus,
+        });
+      }
+      setError('');
     } catch (err) {
       console.error('Error recalling patient:', err);
       alert('حدث خطأ أثناء إعادة المناداة');
@@ -382,6 +405,39 @@ export default function DoctorPage() {
           )}
         </div>
 
+        <div className="mb-6 rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
+          <p className="mb-1 font-semibold text-sky-800">أرقام تمت مناداتها</p>
+          <p className="mb-3 text-sm text-warm">يمكن إعادة نداء أي رقم حتى بعد الانتقال إلى رقم آخر.</p>
+          {calledTickets.length === 0 ? (
+            <p className="text-sm text-warm">لا توجد أرقام تمت مناداتها اليوم</p>
+          ) : (
+            <ul className="max-h-80 space-y-2 overflow-y-auto">
+              {calledTickets.map((ticket) => (
+                <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
+                      <span className="mr-2 text-sm text-warm">{formatDateTime(ticket.called_at)}</span>
+                      {ticket.id === currentTicket?.id ? (
+                        <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">الحالي</span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRecall(ticket)}
+                      disabled={busy}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-100 px-3 py-2 text-sm font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
+                    >
+                      <RefreshCcw size={16} />
+                      إعادة النداء
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {error ? <p className="mb-4 font-bold text-red-700">{error}</p> : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -394,7 +450,7 @@ export default function DoctorPage() {
             {selectedWaiting ? `نداء الرقم ${selectedWaiting.ticket_number}` : 'نداء المريض التالي'} 📢
           </button>
           <button
-            onClick={handleRecall}
+            onClick={() => handleRecall(currentTicket)}
             disabled={busy || !currentTicket}
             className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-100 py-4 px-6 text-xl font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
           >
