@@ -25,6 +25,9 @@ export default function DisplayPage() {
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const overlayTimer = useRef(null);
+  const overlayToken = useRef(0);
+  const callQueue = useRef(Promise.resolve());
+  const announcedKeys = useRef(new Set());
   const lastCallKey = useRef("");
   const lastAnnouncedId = useRef("");
   const announcedCalledAt = useRef(new Map());
@@ -39,7 +42,6 @@ export default function DisplayPage() {
   }
   const clock = useClock();
 
-  const current = callingTickets[0] || null;
   const showQueue = callingTickets.length > 0 || waitingTickets.length > 0;
   const currentImage = images[currentImageIndex] || null;
   const imageSrc = currentImage ? displayImageUrl(currentImage) : "";
@@ -76,17 +78,34 @@ export default function DisplayPage() {
   }
 
   function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
-    if (callKey && lastCallKey.current === callKey) return;
-    if (callKey) lastCallKey.current = callKey;
+    if (callKey && announcedKeys.current.has(callKey)) return;
+    if (callKey) {
+      announcedKeys.current.add(callKey);
+      lastCallKey.current = callKey;
+    }
     if (ticketId) lastAnnouncedId.current = ticketId;
-    setOverlayCall({ ticketNumber, clinicName });
-    setIsNewCall(true);
-    playCallAnnouncement(ticketNumber, clinicName);
-    if (overlayTimer.current) clearTimeout(overlayTimer.current);
-    overlayTimer.current = setTimeout(() => {
-      setIsNewCall(false);
-      setOverlayCall(null);
-    }, 30000);
+
+    callQueue.current = callQueue.current
+      .then(async () => {
+        const token = ++overlayToken.current;
+        setOverlayCall({ ticketNumber, clinicName });
+        setIsNewCall(true);
+        if (overlayTimer.current) clearTimeout(overlayTimer.current);
+        try {
+          await playCallAnnouncement(ticketNumber, clinicName);
+        } catch (err) {
+          console.error("Error playing call announcement:", err);
+        }
+        if (overlayToken.current !== token) return;
+        overlayTimer.current = setTimeout(() => {
+          if (overlayToken.current !== token) return;
+          setIsNewCall(false);
+          setOverlayCall(null);
+        }, 30000);
+      })
+      .catch((err) => {
+        console.error("Error queueing call announcement:", err);
+      });
   }
 
   function isEntryUpdate(record, calledAt) {
@@ -152,16 +171,26 @@ export default function DisplayPage() {
         const top = calling[0];
         if (!primed.current) {
           primed.current = true;
+          calling.forEach((ticket) => {
+            const callKey = `${ticket.id}:${ticket.called_at || ticket.updated}`;
+            announcedKeys.current.add(callKey);
+            announcedCalledAt.current.set(ticket.id, ticket.called_at || "");
+            noteUpdate(ticket.updated);
+          });
           if (top) {
             lastCallKey.current = `${top.id}:${top.called_at || top.updated}`;
             lastAnnouncedId.current = top.id;
-            announcedCalledAt.current.set(top.id, top.called_at || "");
-            noteUpdate(top.updated);
           }
           return;
         }
-        if (announce && top && (!latestUpdate.current || new Date(top.updated).getTime() > new Date(latestUpdate.current).getTime())) {
-          await announceCall(top);
+        if (announce) {
+          const pending = [...calling].sort(
+            (left, right) => new Date(left.called_at || left.updated) - new Date(right.called_at || right.updated),
+          );
+          for (const ticket of pending) {
+            const callKey = `${ticket.id}:${ticket.called_at || ticket.updated}`;
+            if (!announcedKeys.current.has(callKey)) await announceCall(ticket);
+          }
         }
       } catch (err) {
         console.error("Error fetching display tickets:", err);
@@ -225,15 +254,24 @@ export default function DisplayPage() {
               </p>
             </header>
 
-            {current ? (
-              <div className="mb-5 rounded-[28px] border border-sky-300/50 bg-display p-5 text-center">
-                <p className="text-sm text-sky-200">الرقم الحالي</p>
-                <p className="my-2 text-7xl font-black text-white">{current.ticket_number}</p>
-                <p className="rounded-2xl bg-sky-700 px-3 py-2 text-lg font-bold">{clinicNameOf(current)}</p>
-              </div>
-            ) : (
-              <p className="mb-5 rounded-2xl bg-sky-900/50 px-4 py-6 text-center text-sky-100">لا يوجد نداء حالياً</p>
-            )}
+            <h2 className="mb-3 text-lg font-bold text-sky-100">يتم نداؤهم</h2>
+            <div className="mb-4 max-h-[46%] space-y-2 overflow-y-auto">
+              {callingTickets.length === 0 ? (
+                <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
+              ) : (
+                callingTickets.map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-sky-300/40 bg-display px-4 py-3"
+                  >
+                    <span className="text-5xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                    <span className="max-w-[58%] text-start text-lg font-bold leading-7 text-white">
+                      {clinicNameOf(ticket)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
 
             <h2 className="mb-3 text-lg font-bold text-sky-100">في الانتظار</h2>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
@@ -243,10 +281,10 @@ export default function DisplayPage() {
                 waitingTickets.map((ticket, index) => (
                   <div
                     key={ticket.id}
-                    className="flex items-center justify-between rounded-2xl bg-sky-900/45 px-4 py-3"
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-sky-900/45 px-4 py-3"
                   >
-                    <span className="text-3xl font-black text-white">{ticket.ticket_number}</span>
-                    <span className="text-sm text-sky-100">
+                    <span className="text-4xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                    <span className="max-w-[58%] text-start text-base font-bold leading-6 text-sky-50">
                       {clinicNameOf(ticket)} · الدور {index + 1}
                     </span>
                   </div>
