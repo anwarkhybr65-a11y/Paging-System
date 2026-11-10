@@ -79,6 +79,7 @@ export default function DisplayPage() {
 
   function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
     if (callKey && announcedKeys.current.has(callKey)) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     if (callKey) {
       announcedKeys.current.add(callKey);
       lastCallKey.current = callKey;
