@@ -259,14 +259,14 @@ export default function DisplayPage() {
               {callingTickets.length === 0 ? (
                 <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
               ) : (
-                <div className="grid grid-cols-6 gap-2">
+                <div className="grid grid-cols-3 gap-4">
                   {callingTickets.map((ticket) => (
                     <article
                       key={ticket.id}
-                      className="flex aspect-square flex-col items-center justify-center rounded-xl border border-sky-300/50 bg-display px-1 text-center"
+                      className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-sky-300/50 bg-display px-2 text-center"
                     >
-                      <span className="text-xl font-black leading-none text-white">{ticket.ticket_number}</span>
-                      <span className="mt-1 line-clamp-2 text-[10px] font-bold leading-3 text-sky-100">
+                      <span className="text-4xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                      <span className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-sky-100">
                         {clinicNameOf(ticket)}
                       </span>
                     </article>
