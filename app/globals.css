@@ -73,12 +73,16 @@
   animation: call-pulse 1.6s ease-in-out infinite;
 }
 
-.no-scrollbar {
+.no-scrollbar,
+.display-screen,
+.display-screen * {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.no-scrollbar::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar,
+.display-screen::-webkit-scrollbar,
+.display-screen *::-webkit-scrollbar {
   display: none;
 }
 

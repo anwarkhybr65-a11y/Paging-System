@@ -237,7 +237,7 @@ export default function DisplayPage() {
   }, [images]);
 
   return (
-    <main className="h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
+    <main className="display-screen h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
       <div className="flex h-full w-full flex-row">
         {showQueue ? (
           <aside className="flex h-full w-[34%] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l">
@@ -255,18 +255,18 @@ export default function DisplayPage() {
             </header>
 
             <h2 className="mb-3 text-lg font-bold text-sky-100">يتم نداؤهم</h2>
-            <div className="mb-4 max-h-[46%] overflow-y-auto">
+            <div className="no-scrollbar mb-4 max-h-[46%] overflow-y-auto">
               {callingTickets.length === 0 ? (
                 <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-6 gap-2">
                   {callingTickets.map((ticket) => (
                     <article
                       key={ticket.id}
-                      className="flex aspect-square flex-col items-center justify-center rounded-3xl border border-sky-300/50 bg-display px-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+                      className="flex aspect-square flex-col items-center justify-center rounded-xl border border-sky-300/50 bg-display px-1 text-center"
                     >
-                      <span className="text-5xl font-black leading-none text-white">{ticket.ticket_number}</span>
-                      <span className="mt-3 line-clamp-2 text-base font-bold leading-6 text-sky-100">
+                      <span className="text-xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                      <span className="mt-1 line-clamp-2 text-[10px] font-bold leading-3 text-sky-100">
                         {clinicNameOf(ticket)}
                       </span>
                     </article>
