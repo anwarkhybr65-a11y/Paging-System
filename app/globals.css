@@ -73,6 +73,15 @@
   animation: call-pulse 1.6s ease-in-out infinite;
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .ticket-sheet {
   width: 72mm;
   margin: 0 auto;

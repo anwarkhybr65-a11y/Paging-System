@@ -255,26 +255,28 @@ export default function DisplayPage() {
             </header>
 
             <h2 className="mb-3 text-lg font-bold text-sky-100">يتم نداؤهم</h2>
-            <div className="mb-4 max-h-[46%] space-y-2 overflow-y-auto">
+            <div className="mb-4 max-h-[46%] overflow-y-auto">
               {callingTickets.length === 0 ? (
                 <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
               ) : (
-                callingTickets.map((ticket) => (
-                  <div
-                    key={ticket.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-sky-300/40 bg-display px-4 py-3"
-                  >
-                    <span className="text-5xl font-black leading-none text-white">{ticket.ticket_number}</span>
-                    <span className="max-w-[58%] text-start text-lg font-bold leading-7 text-white">
-                      {clinicNameOf(ticket)}
-                    </span>
-                  </div>
-                ))
+                <div className="grid grid-cols-2 gap-3">
+                  {callingTickets.map((ticket) => (
+                    <article
+                      key={ticket.id}
+                      className="flex aspect-square flex-col items-center justify-center rounded-3xl border border-sky-300/50 bg-display px-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+                    >
+                      <span className="text-5xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                      <span className="mt-3 line-clamp-2 text-base font-bold leading-6 text-sky-100">
+                        {clinicNameOf(ticket)}
+                      </span>
+                    </article>
+                  ))}
+                </div>
               )}
             </div>
 
             <h2 className="mb-3 text-lg font-bold text-sky-100">في الانتظار</h2>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+            <div className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto">
               {waitingTickets.length === 0 ? (
                 <p className="rounded-2xl bg-sky-900/40 px-4 py-5 text-center text-sky-200">لا توجد أرقام منتظرة</p>
               ) : (
