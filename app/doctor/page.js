@@ -27,6 +27,7 @@ export default function DoctorPage() {
   const [selectedClinic, setSelectedClinic] = useState('');
   const [currentTicket, setCurrentTicket] = useState(null);
   const [waitingTickets, setWaitingTickets] = useState([]);
+  const [selectedWaitingId, setSelectedWaitingId] = useState('');
   const [clinicTickets, setClinicTickets] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -114,6 +115,9 @@ export default function DoctorPage() {
         }
 
         setWaitingTickets(waitingToday);
+        setSelectedWaitingId((current) =>
+          waitingToday.some((ticket) => ticket.id === current) ? current : waitingToday[0]?.id || '',
+        );
         setCurrentTicket(callingToday[0] || null);
         setClinicTickets(clinicRows);
         setError('');
@@ -147,11 +151,12 @@ export default function DoctorPage() {
 
   const clinicName = clinics.find((clinic) => clinic.id === selectedClinic)?.name || 'العيادة';
 
-  const handleNextPatient = async () => {
+  const handleCallTicket = async (ticketId) => {
     if (!selectedClinic || busy) return;
 
     try {
       setBusy(true);
+      await ensurePocketBase();
       const waitingTicketsPage = await pb.collection('tickets').getFullList({
         filter: waitingFilter(selectedClinic),
         sort: 'created',
@@ -163,7 +168,15 @@ export default function DoctorPage() {
         return;
       }
 
-      const nextTicket = todayWaiting[0];
+      const nextTicket = ticketId
+        ? todayWaiting.find((ticket) => ticket.id === ticketId)
+        : todayWaiting[0];
+
+      if (!nextTicket) {
+        alert('هذا الرقم لم يعد في قائمة الانتظار');
+        return;
+      }
+
       const currentCalling = await pb.collection('tickets').getFullList({
         filter: callingFilter(selectedClinic),
       });
@@ -186,12 +199,14 @@ export default function DoctorPage() {
       setError('');
 
     } catch (err) {
-      console.error('Error calling next patient:', err);
+      console.error('Error calling patient:', err);
       alert('حدث خطأ أثناء نداء المريض');
     } finally {
       setBusy(false);
     }
   };
+
+  const selectedWaiting = waitingTickets.find((ticket) => ticket.id === selectedWaitingId) || waitingTickets[0];
 
   const handleEnterClinic = async () => {
     if (!currentTicket?.id || busy) {
@@ -319,22 +334,50 @@ export default function DoctorPage() {
         </div>
 
         <div className="mb-6 rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
-          <p className="mb-3 font-semibold text-sky-800">حالات الانتظار</p>
+          <p className="mb-1 font-semibold text-sky-800">حالات الانتظار</p>
+          <p className="mb-3 text-sm text-warm">اختر الرقم من القائمة ثم اضغط نداء، أو نادِ رقماً مباشرة.</p>
           {waitingTickets.length === 0 ? (
             <p className="text-sm text-warm">لا توجد تذاكر منتظرة لهذه العيادة</p>
           ) : (
             <ul className="space-y-2">
-              {waitingTickets.map((ticket, index) => (
-                <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
-                    <span className="rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
-                  </div>
-                  {ticket.notes ? (
-                    <p className="mt-2 text-sm leading-6 text-warm">ملاحظة الاستقبال: {ticket.notes}</p>
-                  ) : null}
-                </li>
-              ))}
+              {waitingTickets.map((ticket, index) => {
+                const selected = ticket.id === (selectedWaiting?.id || '');
+                return (
+                  <li
+                    key={ticket.id}
+                    className={`rounded-2xl px-4 py-3.5 ring-1 transition ${
+                      selected ? 'bg-sky-100 ring-sky-300' : 'bg-paper ring-sky-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedWaitingId(ticket.id)}
+                        disabled={busy}
+                        className="min-w-0 flex-1 text-right disabled:opacity-60"
+                      >
+                        <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
+                        <span className="mr-2 rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
+                        {selected ? (
+                          <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">محدد</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCallTicket(ticket.id)}
+                        disabled={busy}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-700 disabled:opacity-60"
+                      >
+                        <Megaphone size={16} />
+                        نداء
+                      </button>
+                    </div>
+                    {ticket.notes ? (
+                      <p className="mt-2 text-sm leading-6 text-warm">ملاحظة الاستقبال: {ticket.notes}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -343,12 +386,12 @@ export default function DoctorPage() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <button
-            onClick={handleNextPatient}
-            disabled={busy}
+            onClick={() => handleCallTicket(selectedWaiting?.id)}
+            disabled={busy || !selectedWaiting}
             className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-600 py-4 px-6 text-xl font-black text-white shadow-[0_10px_24px_rgba(52,126,160,0.28)] transition hover:bg-sky-700 disabled:opacity-60"
           >
             <Megaphone size={22} />
-            نداء المريض التالي 📢
+            {selectedWaiting ? `نداء الرقم ${selectedWaiting.ticket_number}` : 'نداء المريض التالي'} 📢
           </button>
           <button
             onClick={handleRecall}
