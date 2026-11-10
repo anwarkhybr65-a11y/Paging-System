@@ -28,7 +28,7 @@ export default function DisplayPage() {
   const overlayToken = useRef(0);
   const callQueue = useRef(Promise.resolve());
   const announcedKeys = useRef(new Set());
-  const pendingKeys = useRef(new Set());
+  const unheardCall = useRef(null);
   const lastCallKey = useRef("");
   const lastAnnouncedId = useRef("");
   const announcedCalledAt = useRef(new Map());
@@ -79,37 +79,36 @@ export default function DisplayPage() {
   }
 
   function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
-    if (callKey && (announcedKeys.current.has(callKey) || pendingKeys.current.has(callKey))) return;
-    if (callKey) pendingKeys.current.add(callKey);
+    if (callKey && announcedKeys.current.has(callKey)) return;
+    if (callKey) {
+      announcedKeys.current.add(callKey);
+      lastCallKey.current = callKey;
+    }
     if (ticketId) lastAnnouncedId.current = ticketId;
 
+    const token = ++overlayToken.current;
+    setOverlayCall({ ticketNumber, clinicName });
+    setIsNewCall(true);
+    if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => {
+      if (overlayToken.current !== token) return;
+      setIsNewCall(false);
+      setOverlayCall(null);
+    }, 30000);
+
+    const announcement = { ticketNumber, clinicName, callKey };
     callQueue.current = callQueue.current
       .then(async () => {
-        const token = ++overlayToken.current;
-        setOverlayCall({ ticketNumber, clinicName });
-        setIsNewCall(true);
-        if (overlayTimer.current) clearTimeout(overlayTimer.current);
-        let played = false;
-        try {
-          played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
-        } catch (err) {
-          console.error("Error playing call announcement:", err);
+        const played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
+        if (played) {
+          if (unheardCall.current?.callKey === callKey) unheardCall.current = null;
+          return;
         }
-        if (callKey) pendingKeys.current.delete(callKey);
-        if (played && callKey) {
-          announcedKeys.current.add(callKey);
-          lastCallKey.current = callKey;
-        }
-        if (overlayToken.current !== token) return;
-        overlayTimer.current = setTimeout(() => {
-          if (overlayToken.current !== token) return;
-          setIsNewCall(false);
-          setOverlayCall(null);
-        }, 30000);
+        unheardCall.current = announcement;
       })
       .catch((err) => {
-        if (callKey) pendingKeys.current.delete(callKey);
-        console.error("Error queueing call announcement:", err);
+        unheardCall.current = announcement;
+        console.error("Error playing call announcement:", err);
       });
   }
 
@@ -122,43 +121,56 @@ export default function DisplayPage() {
     if (!record || record.status !== TICKET_STATUS.calling) return;
     noteUpdate(record.updated);
     const callKey = `${record.id}:${record.called_at || record.updated}`;
-    if (lastCallKey.current === callKey) return;
+    if (announcedKeys.current.has(callKey) || lastCallKey.current === callKey) return;
     if (isEntryUpdate(record, record.called_at)) {
+      announcedKeys.current.add(callKey);
       lastCallKey.current = callKey;
       return;
     }
     let clinicName = clinicNameOf(record) || "العيادة";
     let calledAt = record.called_at || "";
-    try {
-      const updatedTicket = await pb.collection("tickets").getOne(record.id, {
-        expand: "clinic_id",
-      });
-      clinicName = clinicNameOf(updatedTicket) || clinicName;
-      calledAt = updatedTicket.called_at || calledAt;
-      if (isEntryUpdate(updatedTicket, calledAt)) {
-        lastCallKey.current = callKey;
-        return;
+    if (!record.expand?.clinic_id) {
+      try {
+        const updatedTicket = await Promise.race([
+          pb.collection("tickets").getOne(record.id, { expand: "clinic_id" }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("clinic-timeout")), 1500)),
+        ]);
+        clinicName = clinicNameOf(updatedTicket) || clinicName;
+        calledAt = updatedTicket.called_at || calledAt;
+        if (isEntryUpdate(updatedTicket, calledAt)) {
+          announcedKeys.current.add(callKey);
+          lastCallKey.current = callKey;
+          return;
+        }
+      } catch (err) {
+        console.error("Error fetching expanded clinic info:", err);
       }
-    } catch (err) {
-      console.error("Error fetching expanded clinic info:", err);
     }
     announcedCalledAt.current.set(record.id, calledAt);
     startCallOverlay(record.ticket_number, clinicName, callKey, record.id);
   }
 
   useEffect(() => {
-    const arm = () => {
-      unlockAudio();
+    const arm = async () => {
+      await unlockAudio();
+    };
+    const replay = async () => {
+      await unlockAudio();
+      const pending = unheardCall.current;
+      if (!pending) return;
+      unheardCall.current = null;
+      const played = Boolean(await playCallAnnouncement(pending.ticketNumber, pending.clinicName));
+      if (!played) unheardCall.current = pending;
     };
     arm();
-    window.addEventListener("pointerdown", arm);
-    window.addEventListener("keydown", arm);
-    window.addEventListener("touchstart", arm);
+    window.addEventListener("pointerdown", replay);
+    window.addEventListener("keydown", replay);
+    window.addEventListener("touchstart", replay);
     const timer = setInterval(arm, 3000);
     return () => {
-      window.removeEventListener("pointerdown", arm);
-      window.removeEventListener("keydown", arm);
-      window.removeEventListener("touchstart", arm);
+      window.removeEventListener("pointerdown", replay);
+      window.removeEventListener("keydown", replay);
+      window.removeEventListener("touchstart", replay);
       clearInterval(timer);
     };
   }, []);

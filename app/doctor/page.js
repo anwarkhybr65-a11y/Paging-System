@@ -285,10 +285,13 @@ export default function DoctorPage() {
       if (keepAsCurrent) {
         setCurrentTicket(recalled);
       } else {
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        await pb.collection('tickets').update(target.id, {
-          status: previousStatus,
-        });
+        window.setTimeout(() => {
+          pb.collection('tickets').update(target.id, {
+            status: previousStatus,
+          }).catch((err) => {
+            console.error('Error restoring recalled ticket:', err);
+          });
+        }, 1200);
       }
       setError('');
     } catch (err) {
