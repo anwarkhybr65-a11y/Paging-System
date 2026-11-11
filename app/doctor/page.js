@@ -14,7 +14,7 @@ import {
   TICKET_STATUS,
   waitingFilter,
 } from '@/lib/pb';
-import { nudgeReturningPatientSound, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
+import { nudgeReturningPatientSound, playReturningPatientSound, releaseAudioContext } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 import { BrandMark } from '../BrandMark';
@@ -72,7 +72,7 @@ export default function DoctorPage() {
   }, []);
 
   function armDoctorAudio() {
-    unlockAudio();
+    releaseAudioContext();
     nudgeReturningPatientSound();
   }
 
@@ -339,7 +339,7 @@ export default function DoctorPage() {
             value={selectedClinic}
             disabled={clinicLocked}
             onChange={(e) => {
-              unlockAudio();
+              armDoctorAudio();
               setSelectedClinic(e.target.value);
             }}
           >
