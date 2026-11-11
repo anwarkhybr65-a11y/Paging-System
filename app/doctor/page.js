@@ -14,7 +14,7 @@ import {
   TICKET_STATUS,
   waitingFilter,
 } from '@/lib/pb';
-import { nudgeReturningPatientSound, playReturningPatientSound, releaseAudioContext } from '@/lib/sounds';
+import { armReturningPatientAudio, nudgeReturningPatientSound, playReturningPatientSound } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 import { BrandMark } from '../BrandMark';
@@ -65,15 +65,21 @@ export default function DoctorPage() {
   }, [selectedClinic]);
 
   useEffect(() => {
+    const arm = () => armReturningPatientAudio();
+    window.addEventListener("pointerdown", arm, true);
+    window.addEventListener("keydown", arm, true);
     const timer = setInterval(() => {
       nudgeReturningPatientSound();
     }, 2000);
-    return () => clearInterval(timer);
+    return () => {
+      window.removeEventListener("pointerdown", arm, true);
+      window.removeEventListener("keydown", arm, true);
+      clearInterval(timer);
+    };
   }, []);
 
   function armDoctorAudio() {
-    releaseAudioContext();
-    nudgeReturningPatientSound();
+    armReturningPatientAudio();
   }
 
   useEffect(() => {
