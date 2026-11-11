@@ -339,143 +339,149 @@ export default function DoctorPage() {
           </select>
         </div>
 
-        <div className="mb-6 rounded-[28px] bg-sky-700 p-7 text-center text-white shadow-[0_16px_36px_rgba(42,101,130,0.28)]">
-          <p className="mb-2 text-sky-100">المريض الحالي في العيادة:</p>
-          <p className="text-6xl font-black tracking-wide sm:text-7xl">{currentTicket?.ticket_number || 'لا يوجد'}</p>
-          {currentTicket?.notes ? (
-            <p className="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-right text-sm leading-7 text-sky-50">
-              ملاحظة الاستقبال: {currentTicket.notes}
-            </p>
-          ) : null}
-        </div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)]">
+          <aside className="flex flex-col gap-3">
+            <div className="rounded-2xl bg-sky-700 px-4 py-4 text-center text-white shadow-[0_10px_24px_rgba(42,101,130,0.22)]">
+              <p className="mb-1 text-xs text-sky-100">المريض الحالي في العيادة</p>
+              <p className="text-4xl font-black tracking-wide">{currentTicket?.ticket_number || 'لا يوجد'}</p>
+              {currentTicket?.notes ? (
+                <p className="mt-2 rounded-xl bg-white/10 px-3 py-2 text-right text-xs leading-5 text-sky-50">
+                  ملاحظة الاستقبال: {currentTicket.notes}
+                </p>
+              ) : null}
+            </div>
 
-        <div className="mb-4 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50 px-5 py-4">
-          <span className="flex items-center gap-2 font-medium text-warm">
-            <Users size={18} />
-            عدد المنتظرين بالخارج:
-          </span>
-          <span className="inline-flex min-w-10 items-center justify-center rounded-full bg-paper px-3 py-1 text-2xl font-black text-sky-700 ring-1 ring-sky-100">
-            {waitingTickets.length}
-          </span>
-        </div>
+            <div className="flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2.5">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-warm">
+                <Users size={16} />
+                المنتظرون بالخارج
+              </span>
+              <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-paper px-2 py-0.5 text-lg font-black text-sky-700 ring-1 ring-sky-100">
+                {waitingTickets.length}
+              </span>
+            </div>
 
-        <div className="mb-6 rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
-          <p className="mb-1 font-semibold text-sky-800">حالات الانتظار</p>
-          <p className="mb-3 text-sm text-warm">اختر الرقم من القائمة ثم اضغط نداء، أو نادِ رقماً مباشرة.</p>
-          {waitingTickets.length === 0 ? (
-            <p className="text-sm text-warm">لا توجد تذاكر منتظرة لهذه العيادة</p>
-          ) : (
-            <ul className="space-y-2">
-              {waitingTickets.map((ticket, index) => {
-                const selected = ticket.id === (selectedWaiting?.id || '');
-                return (
-                  <li
-                    key={ticket.id}
-                    className={`rounded-2xl px-4 py-3.5 ring-1 transition ${
-                      selected ? 'bg-sky-100 ring-sky-300' : 'bg-paper ring-sky-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWaitingId(ticket.id)}
-                        disabled={busy}
-                        className="min-w-0 flex-1 text-right disabled:opacity-60"
+            {error ? <p className="font-bold text-red-700">{error}</p> : null}
+
+            <div className="grid gap-2">
+              <button
+                onClick={() => handleCallTicket(selectedWaiting?.id)}
+                disabled={busy || !selectedWaiting}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-black text-white shadow-[0_8px_18px_rgba(52,126,160,0.22)] transition hover:bg-sky-700 disabled:opacity-60"
+              >
+                <Megaphone size={16} />
+                {selectedWaiting ? `نداء الرقم ${selectedWaiting.ticket_number}` : 'نداء المريض التالي'}
+              </button>
+              <button
+                onClick={() => handleRecall(currentTicket)}
+                disabled={busy || !currentTicket}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-100 px-3 py-2.5 text-sm font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
+              >
+                <RefreshCcw size={16} />
+                إعادة المناداة
+              </button>
+              <button
+                onClick={handleEnterClinic}
+                disabled={busy || !currentTicket || Boolean(currentTicket?.entered_at)}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-black text-white transition hover:bg-sky-800 disabled:opacity-60"
+              >
+                <DoorOpen size={16} />
+                دخول العيادة
+              </button>
+              <button
+                onClick={handleCheckout}
+                disabled={busy || !currentTicket}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2.5 text-sm font-black text-white transition hover:bg-black disabled:opacity-60"
+              >
+                <LogOut size={16} />
+                خروج المريض
+              </button>
+            </div>
+          </aside>
+
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
+              <p className="mb-1 font-semibold text-sky-800">حالات الانتظار</p>
+              <p className="mb-3 text-sm text-warm">اختر الرقم من القائمة ثم اضغط نداء، أو نادِ رقماً مباشرة.</p>
+              {waitingTickets.length === 0 ? (
+                <p className="text-sm text-warm">لا توجد تذاكر منتظرة لهذه العيادة</p>
+              ) : (
+                <ul className="max-h-72 space-y-2 overflow-y-auto">
+                  {waitingTickets.map((ticket, index) => {
+                    const selected = ticket.id === (selectedWaiting?.id || '');
+                    return (
+                      <li
+                        key={ticket.id}
+                        className={`rounded-2xl px-4 py-3.5 ring-1 transition ${
+                          selected ? 'bg-sky-100 ring-sky-300' : 'bg-paper ring-sky-100'
+                        }`}
                       >
-                        <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
-                        <span className="mr-2 rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
-                        {selected ? (
-                          <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">محدد</span>
+                        <div className="flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedWaitingId(ticket.id)}
+                            disabled={busy}
+                            className="min-w-0 flex-1 text-right disabled:opacity-60"
+                          >
+                            <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
+                            <span className="mr-2 rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
+                            {selected ? (
+                              <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">محدد</span>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCallTicket(ticket.id)}
+                            disabled={busy}
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-700 disabled:opacity-60"
+                          >
+                            <Megaphone size={16} />
+                            نداء
+                          </button>
+                        </div>
+                        {ticket.notes ? (
+                          <p className="mt-2 text-sm leading-6 text-warm">ملاحظة الاستقبال: {ticket.notes}</p>
                         ) : null}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCallTicket(ticket.id)}
-                        disabled={busy}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-700 disabled:opacity-60"
-                      >
-                        <Megaphone size={16} />
-                        نداء
-                      </button>
-                    </div>
-                    {ticket.notes ? (
-                      <p className="mt-2 text-sm leading-6 text-warm">ملاحظة الاستقبال: {ticket.notes}</p>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
 
-        <div className="mb-6 rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
-          <p className="mb-1 font-semibold text-sky-800">أرقام تمت مناداتها</p>
-          <p className="mb-3 text-sm text-warm">يمكن إعادة نداء أي رقم حتى بعد الانتقال إلى رقم آخر.</p>
-          {calledTickets.length === 0 ? (
-            <p className="text-sm text-warm">لا توجد أرقام تمت مناداتها اليوم</p>
-          ) : (
-            <ul className="max-h-80 space-y-2 overflow-y-auto">
-              {calledTickets.map((ticket) => (
-                <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
-                      <span className="mr-2 text-sm text-warm">{formatDateTime(ticket.called_at)}</span>
-                      {ticket.id === currentTicket?.id ? (
-                        <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">الحالي</span>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRecall(ticket)}
-                      disabled={busy}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-100 px-3 py-2 text-sm font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
-                    >
-                      <RefreshCcw size={16} />
-                      إعادة النداء
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {error ? <p className="mb-4 font-bold text-red-700">{error}</p> : null}
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            onClick={() => handleCallTicket(selectedWaiting?.id)}
-            disabled={busy || !selectedWaiting}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-600 py-4 px-6 text-xl font-black text-white shadow-[0_10px_24px_rgba(52,126,160,0.28)] transition hover:bg-sky-700 disabled:opacity-60"
-          >
-            <Megaphone size={22} />
-            {selectedWaiting ? `نداء الرقم ${selectedWaiting.ticket_number}` : 'نداء المريض التالي'} 📢
-          </button>
-          <button
-            onClick={() => handleRecall(currentTicket)}
-            disabled={busy || !currentTicket}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-100 py-4 px-6 text-xl font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
-          >
-            <RefreshCcw size={22} />
-            إعادة المناداة 🔁
-          </button>
-          <button
-            onClick={handleEnterClinic}
-            disabled={busy || !currentTicket || Boolean(currentTicket?.entered_at)}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-sky-700 py-4 px-6 text-xl font-black text-white transition hover:bg-sky-800 disabled:opacity-60"
-          >
-            <DoorOpen size={22} />
-            دخول العيادة
-          </button>
-          <button
-            onClick={handleCheckout}
-            disabled={busy || !currentTicket}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-ink py-4 px-6 text-xl font-black text-white transition hover:bg-black disabled:opacity-60"
-          >
-            <LogOut size={22} />
-            خروج المريض ✅
-          </button>
+            <div className="rounded-[28px] border border-sky-100 bg-offwhite p-5 text-right">
+              <p className="mb-1 font-semibold text-sky-800">أرقام تمت مناداتها</p>
+              <p className="mb-3 text-sm text-warm">يمكن إعادة نداء أي رقم حتى بعد الانتقال إلى رقم آخر.</p>
+              {calledTickets.length === 0 ? (
+                <p className="text-sm text-warm">لا توجد أرقام تمت مناداتها اليوم</p>
+              ) : (
+                <ul className="max-h-72 space-y-2 overflow-y-auto">
+                  {calledTickets.map((ticket) => (
+                    <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
+                          <span className="mr-2 text-sm text-warm">{formatDateTime(ticket.called_at)}</span>
+                          {ticket.id === currentTicket?.id ? (
+                            <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">الحالي</span>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRecall(ticket)}
+                          disabled={busy}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-100 px-3 py-2 text-sm font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
+                        >
+                          <RefreshCcw size={16} />
+                          إعادة النداء
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
