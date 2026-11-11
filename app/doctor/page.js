@@ -14,7 +14,7 @@ import {
   TICKET_STATUS,
   waitingFilter,
 } from '@/lib/pb';
-import { playReturningPatientSound, unlockAudio } from '@/lib/sounds';
+import { nudgeReturningPatientSound, playReturningPatientSound, unlockAudio } from '@/lib/sounds';
 import { TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 import { BrandMark } from '../BrandMark';
@@ -65,6 +65,18 @@ export default function DoctorPage() {
   }, [selectedClinic]);
 
   useEffect(() => {
+    const timer = setInterval(() => {
+      nudgeReturningPatientSound();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  function armDoctorAudio() {
+    unlockAudio();
+    nudgeReturningPatientSound();
+  }
+
+  useEffect(() => {
     if (!selectedClinic) return;
     let cancelled = false;
     let unsubTickets = null;
@@ -74,9 +86,9 @@ export default function DoctorPage() {
     }
 
     function maybePlayReturning(ticket) {
-      if (!ticket || ticket.clinic_id !== selectedClinic) return;
+      if (!ticket || String(ticket.clinic_id || "") !== String(selectedClinic || "")) return;
       if (!isWaitingStatus(ticket.status)) return;
-      if (localDateKey(ticket.created) !== todayDateKey()) return;
+      if (ticket.created && localDateKey(ticket.created) !== todayDateKey()) return;
       const known = knownWaitingIds.current;
       if (!known) return;
       if (known.has(ticket.id)) return;
@@ -303,7 +315,7 @@ export default function DoctorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl" onPointerDown={unlockAudio}>
+    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl" onPointerDown={armDoctorAudio}>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <div className="w-full rounded-[32px] bg-paper p-6 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-3">
