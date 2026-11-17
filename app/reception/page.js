@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Building2, CalendarClock, Printer, SkipForward, Stethoscope, Ticket } from 'lucide-react';
 import { BrandMark } from '../BrandMark';
 import { UserBar } from '../UserBar';
@@ -10,12 +10,13 @@ import {
   todayDateKey,
   ticketsOnLocalDate,
   pb,
+  isOccupiedStatus,
   pickNextDailyNumber,
   ticketStatusLabel,
   TICKET_MAX,
   TICKET_STATUS,
 } from '@/lib/pb';
-import { PrintTicket } from './PrintTicket';
+import { PrintTicket, ticketPrintCss } from './PrintTicket';
 import { TicketStats, TicketsFlowTable } from '../TicketsFlowTable';
 import { ArchiveToolbar, useWorkDay } from '../ArchiveToolbar';
 
@@ -40,6 +41,8 @@ export default function ReceptionPage() {
   const [busy, setBusy] = useState(false);
   const [savingNoteId, setSavingNoteId] = useState('');
   const [archiveDate, setArchiveDate] = useWorkDay();
+  const [chosenNumber, setChosenNumber] = useState('');
+  const suggestedNumber = useRef(null);
 
   useEffect(() => {
     async function fetchClinics() {
@@ -149,21 +152,45 @@ export default function ReceptionPage() {
     ? pickNextDailyNumber(tickets.filter((ticket) => ticket.clinic_id === selectedClinic))
     : null;
 
+  useEffect(() => {
+    suggestedNumber.current = null;
+  }, [selectedClinic]);
+
+  useEffect(() => {
+    const suggested = nextNumber ? String(nextNumber) : '';
+    setChosenNumber((current) => {
+      if (suggestedNumber.current == null || current === suggestedNumber.current) return suggested;
+      return current;
+    });
+    suggestedNumber.current = suggested;
+  }, [selectedClinic, nextNumber]);
+
   function printWhenReady() {
     const startedAt = Date.now();
     const attempt = () => {
-      const image = document.querySelector("#print-ticket .ticket-logo");
-      if (!image) {
+      const ticket = document.getElementById("print-ticket");
+      if (!ticket) {
         if (Date.now() - startedAt < 1500) window.setTimeout(attempt, 50);
         return;
       }
+      const frame = document.createElement("iframe");
+      frame.setAttribute("aria-hidden", "true");
+      frame.style.cssText = "position:fixed;left:0;top:0;width:72mm;height:130mm;border:0;z-index:-1;pointer-events:none;";
+      document.body.appendChild(frame);
+      const doc = frame.contentDocument;
+      doc.open();
+      doc.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تذكرة</title><style>${ticketPrintCss}</style></head><body>${ticket.outerHTML}</body></html>`);
+      doc.close();
       let started = false;
       const go = () => {
         if (started) return;
         started = true;
-        window.print();
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        window.setTimeout(() => frame.remove(), 1000);
       };
-      if (image.complete && image.naturalWidth > 0) {
+      const image = doc.querySelector(".ticket-logo");
+      if (!image || (image.complete && image.naturalWidth > 0)) {
         go();
         return;
       }
@@ -172,6 +199,28 @@ export default function ReceptionPage() {
       window.setTimeout(go, 1500);
     };
     window.setTimeout(attempt, 50);
+  }
+
+  function takenToday(records) {
+    return new Set(
+      ticketsOnLocalDate(records)
+        .filter((ticket) => isOccupiedStatus(ticket.status))
+        .map((ticket) => Number(ticket.ticket_number))
+        .filter(Number.isFinite),
+    );
+  }
+
+  function chosenTicketValue(records) {
+    const raw = String(chosenNumber).trim();
+    if (!raw) return { value: pickNextDailyNumber(records) };
+    const typed = Number(raw);
+    if (!Number.isInteger(typed) || typed < 1 || typed > TICKET_MAX) {
+      return { error: `اختر رقماً من 1 إلى ${TICKET_MAX}` };
+    }
+    if (takenToday(records).has(typed)) {
+      return { error: `الرقم ${typed} مستخدم اليوم لهذه العيادة` };
+    }
+    return { value: typed };
   }
 
   async function createTicketRecord(status, ticketValue) {
@@ -213,7 +262,12 @@ export default function ReceptionPage() {
         filter: `clinic_id = "${selectedClinic}"`,
         sort: '-created',
       });
-      const ticketValue = pickNextDailyNumber(clinicTicketsToday);
+      const picked = chosenTicketValue(clinicTicketsToday);
+      if (picked.error) {
+        alert(picked.error);
+        return;
+      }
+      const ticketValue = picked.value;
 
       if (!ticketValue) {
         alert(`اكتملت أرقام الانتظار من 1 إلى ${TICKET_MAX} لهذه العيادة اليوم`);
@@ -221,6 +275,10 @@ export default function ReceptionPage() {
       }
 
       const newTicket = await createTicketRecord(TICKET_STATUS.waiting, ticketValue);
+      const upcoming = pickNextDailyNumber([...clinicTicketsToday, newTicket]);
+      const upcomingText = upcoming ? String(upcoming) : '';
+      suggestedNumber.current = upcomingText;
+      setChosenNumber(upcomingText);
 
       if (shouldPrint) {
         printWhenReady();
@@ -368,8 +426,18 @@ export default function ReceptionPage() {
             </div>
 
             <div className="mb-6 rounded-[24px] bg-sky-700 p-5 text-center text-white">
-              <p className="text-sky-100">الرقم التالي للطباعة</p>
-              <p className="mt-1 text-6xl font-black">{nextNumber || '—'}</p>
+              <label htmlFor="ticket-number" className="text-sky-100">اختر رقم التذكرة</label>
+              <input
+                id="ticket-number"
+                type="number"
+                min={1}
+                max={TICKET_MAX}
+                inputMode="numeric"
+                value={chosenNumber}
+                onChange={(e) => setChosenNumber(e.target.value)}
+                className="mt-1 w-full bg-transparent text-center text-6xl font-black outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <p className="mt-2 text-sm text-sky-100">الرقم التالي المقترح: {nextNumber || '—'}</p>
             </div>
 
             <label className="mb-4 block text-right">
