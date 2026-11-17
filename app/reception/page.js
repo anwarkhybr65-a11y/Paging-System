@@ -149,6 +149,31 @@ export default function ReceptionPage() {
     ? pickNextDailyNumber(tickets.filter((ticket) => ticket.clinic_id === selectedClinic))
     : null;
 
+  function printWhenReady() {
+    const startedAt = Date.now();
+    const attempt = () => {
+      const image = document.querySelector("#print-ticket .ticket-logo");
+      if (!image) {
+        if (Date.now() - startedAt < 1500) window.setTimeout(attempt, 50);
+        return;
+      }
+      let started = false;
+      const go = () => {
+        if (started) return;
+        started = true;
+        window.print();
+      };
+      if (image.complete && image.naturalWidth > 0) {
+        go();
+        return;
+      }
+      image.addEventListener("load", go, { once: true });
+      image.addEventListener("error", go, { once: true });
+      window.setTimeout(go, 1500);
+    };
+    window.setTimeout(attempt, 50);
+  }
+
   async function createTicketRecord(status, ticketValue) {
     const data = {
       ticket_number: String(ticketValue),
@@ -198,9 +223,7 @@ export default function ReceptionPage() {
       const newTicket = await createTicketRecord(TICKET_STATUS.waiting, ticketValue);
 
       if (shouldPrint) {
-        setTimeout(() => {
-          window.print();
-        }, 300);
+        printWhenReady();
       } else {
         setLastTicket(newTicket);
       }
@@ -260,9 +283,7 @@ export default function ReceptionPage() {
       });
       setLastTicket(updated);
       if (shouldPrint) {
-        setTimeout(() => {
-          window.print();
-        }, 300);
+        printWhenReady();
       }
     } catch (err) {
       console.error('Error activating reserved ticket:', err?.data || err);
@@ -474,7 +495,7 @@ export default function ReceptionPage() {
       </div>
 
       {lastTicket && lastTicket.status !== TICKET_STATUS.reserved && (
-        <div className="hidden print:block">
+        <div className="ticket-print-host">
           <PrintTicket
             ticketNumber={lastTicket.ticket_number}
             clinicName={clinicName}

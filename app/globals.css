@@ -103,11 +103,18 @@
 
 .ticket-logo {
   display: block;
-  width: 34mm;
+  width: 42mm;
   height: auto;
-  max-height: 16mm;
   margin: 0 auto 1.5mm;
   object-fit: contain;
+}
+
+.ticket-print-host {
+  position: fixed;
+  top: 0;
+  left: -120mm;
+  width: 80mm;
+  pointer-events: none;
 }
 
 .ticket-head h2 {
@@ -242,6 +249,12 @@
     visibility: visible;
   }
 
+  .ticket-print-host {
+    position: static;
+    left: auto;
+    width: 80mm;
+  }
+
   #print-ticket {
     page: ticket;
     position: static;
@@ -254,6 +267,13 @@
     color: #111;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  #print-ticket .ticket-logo {
+    display: block !important;
+    visibility: visible !important;
+    width: 42mm !important;
+    height: auto !important;
   }
 
   #print-report {
