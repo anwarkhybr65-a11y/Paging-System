@@ -101,10 +101,13 @@
   border-bottom: 1px dashed #111;
 }
 
-.ticket-mark {
-  margin: 0 0 1mm;
-  font-size: 16px;
-  line-height: 1;
+.ticket-logo {
+  display: block;
+  width: 34mm;
+  height: auto;
+  max-height: 16mm;
+  margin: 0 auto 1.5mm;
+  object-fit: contain;
 }
 
 .ticket-head h2 {
@@ -185,33 +188,38 @@
   border-radius: 18px;
 }
 
-@media print {
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
+@page ticket {
+  size: 80mm auto;
+  margin: 0;
+}
 
+@page report {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
   html.report-print {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  html.report-print {
-    @page {
-      size: A4 portrait;
-      margin: 12mm;
-    }
-  }
-
-  html,
-  body {
-    width: 80mm;
+  html:not(.report-print),
+  html:not(.report-print) body,
+  html:not(.report-print) body > div {
+    width: 80mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff !important;
   }
 
   html.report-print,
   html.report-print body {
     width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   body * {
@@ -235,14 +243,21 @@
   }
 
   #print-ticket {
-    position: absolute;
-    inset: 0;
+    page: ticket;
+    position: static;
+    box-sizing: border-box;
     width: 80mm;
     max-width: 80mm;
     margin: 0;
-    padding: 3mm 3.5mm 4mm;
+    padding: 2.5mm 4mm 3mm;
     background: #fff;
     color: #111;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  #print-report {
+    page: report;
   }
 
   html.report-print #print-report {

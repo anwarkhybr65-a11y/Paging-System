@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, ticketsOnLocalDate, TICKET_STATUS } from "@/lib/pb";
-import { playCallAnnouncement, unlockAudio } from "@/lib/sounds";
+import { armDisplayAudio, playCallAnnouncement } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
 function useClock() {
@@ -96,7 +96,7 @@ export default function DisplayPage() {
       setOverlayCall(null);
     }, 30000);
 
-    const announcement = { ticketNumber, clinicName, callKey };
+    const announcement = { ticketNumber, clinicName, callKey, playing: false };
     callQueue.current = callQueue.current
       .then(async () => {
         const played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
@@ -151,26 +151,25 @@ export default function DisplayPage() {
   }
 
   useEffect(() => {
-    const arm = async () => {
-      await unlockAudio();
-    };
-    const replay = async () => {
-      await unlockAudio();
+    const replay = () => {
+      armDisplayAudio();
       const pending = unheardCall.current;
-      if (!pending) return;
-      unheardCall.current = null;
-      const played = Boolean(await playCallAnnouncement(pending.ticketNumber, pending.clinicName));
-      if (!played) unheardCall.current = pending;
+      if (!pending || pending.playing) return;
+      pending.playing = true;
+      playCallAnnouncement(pending.ticketNumber, pending.clinicName).then((played) => {
+        if (unheardCall.current !== pending) return;
+        if (played) unheardCall.current = null;
+        else pending.playing = false;
+      });
     };
-    arm();
-    window.addEventListener("pointerdown", replay);
-    window.addEventListener("keydown", replay);
-    window.addEventListener("touchstart", replay);
-    const timer = setInterval(arm, 3000);
+    window.addEventListener("pointerdown", replay, true);
+    window.addEventListener("keydown", replay, true);
+    window.addEventListener("touchstart", replay, true);
+    const timer = setInterval(replay, 2000);
     return () => {
-      window.removeEventListener("pointerdown", replay);
-      window.removeEventListener("keydown", replay);
-      window.removeEventListener("touchstart", replay);
+      window.removeEventListener("pointerdown", replay, true);
+      window.removeEventListener("keydown", replay, true);
+      window.removeEventListener("touchstart", replay, true);
       clearInterval(timer);
     };
   }, []);
@@ -257,11 +256,11 @@ export default function DisplayPage() {
     <main className="display-screen h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
       <div className="flex h-full w-full flex-row">
         {showQueue ? (
-          <aside className="flex h-full w-[34%] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l">
+          <aside className="flex h-full w-[clamp(20rem,30vw,34rem)] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l xl:p-6">
             <header className="mb-5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <BrandMark size="sm" />
-                <h1 className="text-xl font-black">قائمة النداء</h1>
+                <h1 className="truncate text-xl font-black xl:text-2xl">قائمة النداء</h1>
               </div>
               <p className="inline-flex items-center gap-2 rounded-full bg-sky-900/50 px-3 py-1.5 text-sky-200">
                 <Clock3 size={16} />
@@ -276,13 +275,13 @@ export default function DisplayPage() {
               {callingTickets.length === 0 ? (
                 <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
               ) : (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-3 xl:grid-cols-2 xl:gap-4">
                   {callingTickets.map((ticket) => (
                     <article
                       key={ticket.id}
                       className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-sky-300/50 bg-display px-2 text-center"
                     >
-                      <span className="text-4xl font-black leading-none text-white">{ticket.ticket_number}</span>
+                      <span className="text-4xl font-black leading-none text-white xl:text-5xl">{ticket.ticket_number}</span>
                       <span className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-sky-100">
                         {clinicNameOf(ticket)}
                       </span>

@@ -24,7 +24,7 @@ export function PrintTicket({
       className={preview ? "ticket-sheet ticket-preview" : "ticket-sheet"}
     >
       <header className="ticket-head">
-        <p className="ticket-mark">✚</p>
+        <img src="/brand/ax-logo.png" alt="شعار المجمع" className="ticket-logo" />
         <h2>مجمع انوار خيبر الطبي العام</h2>
         <p className="ticket-en">Anwar Khaibar General Medical Complex</p>
       </header>

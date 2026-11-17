@@ -288,8 +288,8 @@ export default function ReceptionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 print:hidden">
+    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-5 py-5 xl:px-8 print:min-h-0 print:bg-white print:p-0" dir="rtl">
+      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 print:hidden">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <BrandMark size="sm" />
