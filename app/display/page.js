@@ -6,6 +6,38 @@ import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, ticketsOnLocalDate
 import { armDisplayAudio, playCallAnnouncement } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
+const DISPLAY_SLOTS = [
+  { label: "عيادة الأسنان 1", names: ["عيادة الاسنان رقم 1"] },
+  { label: "عيادة الأسنان 2", names: ["عيادة الاسنان رقم 2"] },
+  { label: "عيادة الأسنان 3", names: ["عيادة الاسنان رقم 3"] },
+  { label: "الباطنة", names: ["عيادة الباطنة"] },
+  { label: "النساء والولادة", names: ["عيادة النساء و الولادة", "عيادة النساء والولادة"] },
+  { label: "المختبر", names: ["المختبر"] },
+];
+
+function normalizeClinicName(value) {
+  return String(value || "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/\s*و\s*/g, "و")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clinicForSlot(clinics, slot) {
+  const names = slot.names.map(normalizeClinicName);
+  return clinics.find((clinic) => names.includes(normalizeClinicName(clinic.name))) || null;
+}
+
+function currentNumberForSlot(clinics, callingTickets, slot) {
+  const clinic = clinicForSlot(clinics, slot);
+  if (!clinic) return "";
+  const tickets = callingTickets
+    .filter((ticket) => ticket.clinic_id === clinic.id)
+    .sort((left, right) => new Date(right.called_at || right.updated) - new Date(left.called_at || left.updated));
+  return tickets[0]?.ticket_number || "";
+}
+
 function useClock() {
   const [now, setNow] = useState(null);
   useEffect(() => {
@@ -19,7 +51,7 @@ function useClock() {
 
 export default function DisplayPage() {
   const [callingTickets, setCallingTickets] = useState([]);
-  const [waitingTickets, setWaitingTickets] = useState([]);
+  const [clinics, setClinics] = useState([]);
   const [isNewCall, setIsNewCall] = useState(false);
   const [overlayCall, setOverlayCall] = useState(null);
   const [images, setImages] = useState([]);
@@ -43,7 +75,6 @@ export default function DisplayPage() {
   }
   const clock = useClock();
 
-  const showQueue = callingTickets.length > 0 || waitingTickets.length > 0;
   const currentImage = images[currentImageIndex] || null;
   const imageSrc = currentImage ? displayImageUrl(currentImage) : "";
 
@@ -60,21 +91,17 @@ export default function DisplayPage() {
 
   async function fetchQueue() {
     await ensurePocketBase();
-    const [calling, waiting] = await Promise.all([
+    const [calling, clinicRecords] = await Promise.all([
       pb.collection("tickets").getFullList({
         filter: `status = "${TICKET_STATUS.calling}"`,
         sort: "-updated",
         expand: "clinic_id",
       }),
-      pb.collection("tickets").getFullList({
-        filter: `status = "${TICKET_STATUS.waiting}"`,
-        sort: "created",
-        expand: "clinic_id",
-      }),
+      pb.collection("clinics").getFullList({ sort: "name" }),
     ]);
     return {
       calling: ticketsOnLocalDate(calling),
-      waiting: ticketsOnLocalDate(waiting),
+      clinics: clinicRecords,
     };
   }
 
@@ -180,10 +207,10 @@ export default function DisplayPage() {
 
     async function applyQueue(announce) {
       try {
-        const { calling, waiting } = await fetchQueue();
+        const { calling, clinics: clinicRecords } = await fetchQueue();
         if (cancelled) return;
         setCallingTickets(calling);
-        setWaitingTickets(waiting);
+        setClinics(clinicRecords);
         const top = calling[0];
         if (!primed.current) {
           primed.current = true;
@@ -255,62 +282,38 @@ export default function DisplayPage() {
   return (
     <main className="display-screen h-screen w-screen overflow-hidden bg-display font-sans text-white" dir="rtl">
       <div className="flex h-full w-full flex-row">
-        {showQueue ? (
-          <aside className="flex h-full w-[clamp(20rem,30vw,34rem)] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l xl:p-6">
-            <header className="mb-5 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <BrandMark size="sm" />
-                <h1 className="truncate text-xl font-black xl:text-2xl">قائمة النداء</h1>
-              </div>
-              <p className="inline-flex items-center gap-2 rounded-full bg-sky-900/50 px-3 py-1.5 text-sky-200">
-                <Clock3 size={16} />
-                {clock
-                  ? clock.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })
-                  : "--:--"}
-              </p>
-            </header>
-
-            <h2 className="mb-3 text-lg font-bold text-sky-100">يتم نداؤهم</h2>
-            <div className="no-scrollbar mb-4 max-h-[46%] overflow-y-auto">
-              {callingTickets.length === 0 ? (
-                <p className="rounded-2xl bg-sky-900/50 px-4 py-5 text-center text-sky-100">لا يوجد نداء حالياً</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-3 xl:grid-cols-2 xl:gap-4">
-                  {callingTickets.map((ticket) => (
-                    <article
-                      key={ticket.id}
-                      className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-sky-300/50 bg-display px-2 text-center"
-                    >
-                      <span className="text-4xl font-black leading-none text-white xl:text-5xl">{ticket.ticket_number}</span>
-                      <span className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-sky-100">
-                        {clinicNameOf(ticket)}
-                      </span>
-                    </article>
-                  ))}
-                </div>
-              )}
+        <aside className="flex h-full w-[clamp(22rem,34vw,40rem)] shrink-0 flex-col border-sky-900/60 bg-[#143140] p-5 lg:border-l xl:p-6">
+          <header className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <BrandMark size="sm" />
+              <h1 className="truncate text-xl font-black xl:text-2xl">العيادات</h1>
             </div>
-
-            <h2 className="mb-3 text-lg font-bold text-sky-100">في الانتظار</h2>
-            <div className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto">
-              {waitingTickets.length === 0 ? (
-                <p className="rounded-2xl bg-sky-900/40 px-4 py-5 text-center text-sky-200">لا توجد أرقام منتظرة</p>
-              ) : (
-                waitingTickets.map((ticket, index) => (
-                  <div
-                    key={ticket.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-sky-900/45 px-4 py-3"
-                  >
-                    <span className="text-4xl font-black leading-none text-white">{ticket.ticket_number}</span>
-                    <span className="max-w-[58%] text-start text-base font-bold leading-6 text-sky-50">
-                      {clinicNameOf(ticket)} · الدور {index + 1}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
-        ) : null}
+            <p className="inline-flex items-center gap-2 rounded-full bg-sky-900/50 px-3 py-1.5 text-sky-200">
+              <Clock3 size={16} />
+              {clock
+                ? clock.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })
+                : "--:--"}
+            </p>
+          </header>
+          <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-3">
+            {DISPLAY_SLOTS.map((slot) => {
+              const ticketNumber = currentNumberForSlot(clinics, callingTickets, slot);
+              return (
+                <article
+                  key={slot.label}
+                  className="flex min-h-0 flex-col items-center justify-center rounded-2xl border border-sky-300/50 bg-display px-3 text-center"
+                >
+                  <span className="text-5xl font-black leading-none text-white xl:text-6xl">
+                    {ticketNumber || "—"}
+                  </span>
+                  <span className="mt-3 line-clamp-2 text-lg font-bold leading-6 text-sky-100">
+                    {slot.label}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        </aside>
 
         <section className="relative flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden bg-black">
           {imageSrc ? (

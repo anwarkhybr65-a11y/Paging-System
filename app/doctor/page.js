@@ -321,8 +321,8 @@ export default function DoctorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-4 py-8" dir="rtl" onPointerDown={armDoctorAudio}>
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <div className="min-h-screen bg-linear-to-b from-sky-50 via-offwhite to-offwhite px-5 py-5 xl:px-8" dir="rtl" onPointerDown={armDoctorAudio}>
+      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5">
       <div className="w-full rounded-[32px] bg-paper p-6 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -424,8 +424,8 @@ export default function DoctorPage() {
               {waitingTickets.length === 0 ? (
                 <p className="text-sm text-warm">لا توجد تذاكر منتظرة لهذه العيادة</p>
               ) : (
-                <ul className="max-h-72 space-y-2 overflow-y-auto">
-                  {waitingTickets.map((ticket, index) => {
+                <ul className="max-h-72 space-y-2 overflow-y-auto xl:max-h-[calc(42vh-1rem)]">
+                  {waitingTickets.map((ticket) => {
                     const selected = ticket.id === (selectedWaiting?.id || '');
                     return (
                       <li
@@ -442,7 +442,6 @@ export default function DoctorPage() {
                             className="min-w-0 flex-1 text-right disabled:opacity-60"
                           >
                             <span className="text-xl font-black text-sky-800">{ticket.ticket_number}</span>
-                            <span className="mr-2 rounded-full bg-sky-50 px-3 py-1 text-sm text-warm">الدور {index + 1}</span>
                             {selected ? (
                               <span className="mr-2 rounded-full bg-sky-600 px-3 py-1 text-sm font-bold text-white">محدد</span>
                             ) : null}
@@ -473,7 +472,7 @@ export default function DoctorPage() {
               {calledTickets.length === 0 ? (
                 <p className="text-sm text-warm">لا توجد أرقام تمت مناداتها اليوم</p>
               ) : (
-                <ul className="max-h-72 space-y-2 overflow-y-auto">
+                <ul className="max-h-72 space-y-2 overflow-y-auto xl:max-h-[calc(42vh-1rem)]">
                   {calledTickets.map((ticket) => (
                     <li key={ticket.id} className="rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-sky-100">
                       <div className="flex items-center justify-between gap-3">
