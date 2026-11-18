@@ -45,6 +45,7 @@ export function TicketsFlowTable({
   savingNoteId = "",
   onSaveNote,
   onActivateReserved,
+  onDeleteTicket,
   busy = false,
   showStats = true,
   statsTitle,
@@ -115,18 +116,30 @@ export function TicketsFlowTable({
                   </td>
                   {notesEditable ? (
                     <td className="px-3 py-3">
-                      {ticket.status === TICKET_STATUS.reserved ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onActivateReserved?.(ticket)}
-                          className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
-                        >
-                          تفعيل الرقم
-                        </button>
-                      ) : (
-                        <span className="text-warm">—</span>
-                      )}
+                      <div className="flex flex-col items-start gap-2">
+                        {ticket.status === TICKET_STATUS.reserved ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onActivateReserved?.(ticket)}
+                            className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                          >
+                            تفعيل الرقم
+                          </button>
+                        ) : null}
+                        {onDeleteTicket ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onDeleteTicket(ticket)}
+                            className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 ring-1 ring-red-100 disabled:opacity-60"
+                          >
+                            حذف الرقم
+                          </button>
+                        ) : (
+                          ticket.status === TICKET_STATUS.reserved ? null : <span className="text-warm">—</span>
+                        )}
+                      </div>
                     </td>
                   ) : null}
                 </tr>

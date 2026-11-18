@@ -148,13 +148,17 @@ export default function ReceptionPage() {
   const archivedTickets = filterTicketsByDate(tickets, archiveDate || todayDateKey());
   const clinicTickets = archivedTickets.filter((ticket) => ticket.clinic_id === selectedClinic);
   const liveTickets = ticketsOnLocalDate(tickets);
+  function ticketsForDoctor(records) {
+    return (records || []).filter((ticket) => String(ticket.doctor || "") === String(selectedDoctor || ""));
+  }
+
   const nextNumber = selectedClinic
-    ? pickNextDailyNumber(tickets.filter((ticket) => ticket.clinic_id === selectedClinic))
+    ? pickNextDailyNumber(ticketsForDoctor(tickets.filter((ticket) => ticket.clinic_id === selectedClinic)))
     : null;
 
   useEffect(() => {
     suggestedNumber.current = null;
-  }, [selectedClinic]);
+  }, [selectedClinic, selectedDoctor]);
 
   useEffect(() => {
     const suggested = nextNumber ? String(nextNumber) : '';
@@ -163,7 +167,7 @@ export default function ReceptionPage() {
       return current;
     });
     suggestedNumber.current = suggested;
-  }, [selectedClinic, nextNumber]);
+  }, [selectedClinic, selectedDoctor, nextNumber]);
 
   function printWhenReady() {
     const startedAt = Date.now();
@@ -218,7 +222,7 @@ export default function ReceptionPage() {
       return { error: `اختر رقماً من 1 إلى ${TICKET_MAX}` };
     }
     if (takenToday(records).has(typed)) {
-      return { error: `الرقم ${typed} مستخدم اليوم لهذه العيادة` };
+      return { error: `الرقم ${typed} مستخدم اليوم لهذا الطبيب` };
     }
     return { value: typed };
   }
@@ -258,10 +262,10 @@ export default function ReceptionPage() {
 
     try {
       setBusy(true);
-      const clinicTicketsToday = await pb.collection('tickets').getFullList({
+      const clinicTicketsToday = ticketsForDoctor(await pb.collection('tickets').getFullList({
         filter: `clinic_id = "${selectedClinic}"`,
         sort: '-created',
-      });
+      }));
       const picked = chosenTicketValue(clinicTicketsToday);
       if (picked.error) {
         alert(picked.error);
@@ -270,7 +274,7 @@ export default function ReceptionPage() {
       const ticketValue = picked.value;
 
       if (!ticketValue) {
-        alert(`اكتملت أرقام الانتظار من 1 إلى ${TICKET_MAX} لهذه العيادة اليوم`);
+        alert(`اكتملت أرقام الانتظار من 1 إلى ${TICKET_MAX} لهذا الطبيب اليوم`);
         return;
       }
 
@@ -305,14 +309,14 @@ export default function ReceptionPage() {
 
     try {
       setBusy(true);
-      const clinicTicketsToday = await pb.collection('tickets').getFullList({
+      const clinicTicketsToday = ticketsForDoctor(await pb.collection('tickets').getFullList({
         filter: `clinic_id = "${selectedClinic}"`,
         sort: '-created',
-      });
+      }));
       const ticketValue = pickNextDailyNumber(clinicTicketsToday);
 
       if (!ticketValue) {
-        alert(`اكتملت أرقام الانتظار من 1 إلى ${TICKET_MAX} لهذه العيادة اليوم`);
+        alert(`اكتملت أرقام الانتظار من 1 إلى ${TICKET_MAX} لهذا الطبيب اليوم`);
         return;
       }
 
@@ -320,6 +324,24 @@ export default function ReceptionPage() {
     } catch (err) {
       console.error('Error reserving ticket:', err?.data || err);
       alert(`خطأ: ${pocketbaseErrorMessage(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteTicket = async (ticket) => {
+    const doctorLabel = doctorNameOf(ticket) || printedDoctorName || "";
+    const confirmed = window.confirm(`حذف الرقم ${ticket.ticket_number}${doctorLabel ? ` (${doctorLabel})` : ""}؟`);
+    if (!confirmed) return;
+    try {
+      setBusy(true);
+      await ensurePocketBase();
+      await pb.collection('tickets').delete(ticket.id);
+      setTickets((items) => items.filter((item) => item.id !== ticket.id));
+      if (lastTicket?.id === ticket.id) setLastTicket(null);
+    } catch (err) {
+      console.error('Error deleting ticket:', err?.data || err);
+      alert(`تعذر حذف الرقم: ${pocketbaseErrorMessage(err)}`);
     } finally {
       setBusy(false);
     }
@@ -437,7 +459,7 @@ export default function ReceptionPage() {
                 onChange={(e) => setChosenNumber(e.target.value)}
                 className="mt-1 w-full bg-transparent text-center text-6xl font-black outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
-              <p className="mt-2 text-sm text-sky-100">الرقم التالي المقترح: {nextNumber || '—'}</p>
+              <p className="mt-2 text-sm text-sky-100">الرقم التالي لهذا الطبيب: {nextNumber || '—'}</p>
             </div>
 
             <label className="mb-4 block text-right">
@@ -547,6 +569,7 @@ export default function ReceptionPage() {
               savingNoteId={savingNoteId}
               onSaveNote={handleSaveNote}
               onActivateReserved={handleActivateReserved}
+              onDeleteTicket={handleDeleteTicket}
               busy={busy}
               showStats={false}
             />
