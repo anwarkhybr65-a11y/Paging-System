@@ -35,7 +35,9 @@ export default function AdminClinicsPage() {
   const [extraDoctor, setExtraDoctor] = useState("");
   const [extraUsername, setExtraUsername] = useState("");
   const [extraPassword, setExtraPassword] = useState("");
+  const [clinicNames, setClinicNames] = useState({});
   const [busy, setBusy] = useState(false);
+  const [savingId, setSavingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -48,6 +50,7 @@ export default function AdminClinicsPage() {
         pb.collection(STAFF_COLLECTION).getFullList({ sort: "name" }),
       ]);
       setClinics(records);
+      setClinicNames(Object.fromEntries(records.map((clinic) => [clinic.id, clinic.name || ""])));
       setStaff(accounts);
     } catch (err) {
       console.error(err);
@@ -162,6 +165,33 @@ export default function AdminClinicsPage() {
     }
   }
 
+  async function handleRename(clinic) {
+    const nextName = (clinicNames[clinic.id] || "").trim();
+    if (!nextName) {
+      setMessage("أدخل اسم العيادة");
+      return;
+    }
+    if (clinics.some((item) => item.id !== clinic.id && item.name === nextName)) {
+      setMessage("هذه العيادة موجودة مسبقاً");
+      return;
+    }
+    if (nextName === (clinic.name || "")) return;
+
+    try {
+      setSavingId(clinic.id);
+      setMessage("");
+      await ensurePocketBase();
+      await pb.collection("clinics").update(clinic.id, { name: nextName });
+      await loadClinics();
+      setMessage(`تم تعديل اسم العيادة إلى ${nextName}`);
+    } catch (err) {
+      console.error(err);
+      setMessage("تعذر حفظ اسم العيادة");
+    } finally {
+      setSavingId("");
+    }
+  }
+
   async function handleDelete(clinic) {
     if (!clinic?.id || deletingId || busy) return;
     const clinicName = clinic.name || "هذه العيادة";
@@ -203,7 +233,7 @@ export default function AdminClinicsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-ink sm:text-3xl">إدارة العيادات</h1>
-              <p className="mt-1 text-sm text-warm">أضف عيادة مع حساب دخول للطبيب، أو أنشئ حساباً لعيادة موجودة.</p>
+              <p className="mt-1 text-sm text-warm">أضف عيادة مع حساب دخول، أو عدّل اسم عيادة موجودة، أو أنشئ مستخدماً لها.</p>
             </div>
           </div>
           <UserBar />
@@ -327,21 +357,34 @@ export default function AdminClinicsPage() {
             {clinics.map((clinic) => (
               <li
                 key={clinic.id}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-sky-50 px-4 py-3 font-bold text-ink ring-1 ring-sky-100"
+                className="flex flex-col gap-3 rounded-2xl bg-sky-50 px-4 py-3 ring-1 ring-sky-100 sm:flex-row sm:items-end"
               >
-                <span>
-                  {clinic.name}
-                  <span className="mr-2 text-sm font-semibold text-warm">
-                    {staff.some((account) => account.role === "doctor" && account.clinic === clinic.id)
-                      ? "· لها مستخدم"
-                      : "· بدون مستخدم"}
-                  </span>
+                <label className="min-w-0 flex-1 text-sm font-semibold text-warm">
+                  اسم العيادة
+                  <input
+                    value={clinicNames[clinic.id] || ""}
+                    onChange={(event) => setClinicNames((current) => ({ ...current, [clinic.id]: event.target.value }))}
+                    className="mt-1 w-full rounded-2xl border border-sky-100 bg-paper px-4 py-2.5 font-bold text-ink outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+                <span className="pb-2.5 text-sm font-semibold text-warm">
+                  {staff.some((account) => account.role === "doctor" && account.clinic === clinic.id)
+                    ? "لها مستخدم"
+                    : "بدون مستخدم"}
                 </span>
                 <button
                   type="button"
-                  disabled={Boolean(deletingId) || busy}
+                  disabled={savingId === clinic.id || Boolean(deletingId) || busy}
+                  onClick={() => handleRename(clinic)}
+                  className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-700 disabled:opacity-60"
+                >
+                  {savingId === clinic.id ? "جاري الحفظ..." : "حفظ الاسم"}
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(deletingId) || busy || Boolean(savingId)}
                   onClick={() => handleDelete(clinic)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-3 py-2 text-sm font-bold text-white transition hover:bg-black disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2.5 text-sm font-bold text-white transition hover:bg-black disabled:opacity-60"
                 >
                   <Trash2 size={16} />
                   {deletingId === clinic.id ? "جاري الحذف..." : "حذف"}

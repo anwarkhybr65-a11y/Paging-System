@@ -11,7 +11,7 @@ const adminTools = [
   {
     href: "/admin/clinics",
     title: "العيادات",
-    description: "إضافة عيادة مع حساب دخول للطبيب، أو إنشاء مستخدم لعيادة موجودة.",
+    description: "إضافة عيادة مع حساب دخول، وتعديل اسم أي عيادة موجودة.",
     action: "إدارة العيادات",
     icon: Building2,
   },
