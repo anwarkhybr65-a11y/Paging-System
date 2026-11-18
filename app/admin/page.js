@@ -11,7 +11,7 @@ const adminTools = [
   {
     href: "/admin/clinics",
     title: "العيادات",
-    description: "إضافة عيادة أو قسم جديد، أو حذف عيادة لم تعد مستخدمة.",
+    description: "إضافة عيادة مع حساب دخول للطبيب، أو إنشاء مستخدم لعيادة موجودة.",
     action: "إدارة العيادات",
     icon: Building2,
   },

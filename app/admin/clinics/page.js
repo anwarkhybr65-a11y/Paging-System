@@ -3,14 +3,38 @@
 import { useEffect, useState } from "react";
 import { Building2, Trash2 } from "lucide-react";
 import { ensurePocketBase, pb } from "@/lib/pb";
+import { STAFF_COLLECTION } from "@/lib/auth";
 import { BrandMark } from "../../BrandMark";
 import { UserBar } from "../../UserBar";
 import { useAuth } from "../../AuthProvider";
 
+function accountError(err) {
+  const fields = err?.data?.data || err?.response?.data || {};
+  if (fields.username) return "اسم المستخدم مستخدم مسبقاً أو غير صالح. استخدم حروفاً إنجليزية وأرقاماً.";
+  if (fields.password) return "كلمة المرور يجب ألا تقل عن 4 خانات";
+  if (err?.status === 403 || err?.status === 404) return "الخادم رفض إنشاء الحساب. حدّث صلاحيات المستخدمين ثم أعد المحاولة.";
+  return err?.message || "تعذر إنشاء المستخدم";
+}
+
+function validateAccount(doctorName, username, password) {
+  if (!doctorName.trim()) return "أدخل اسم الطبيب";
+  if (!/^[a-zA-Z0-9_]{3,50}$/.test(username)) return "اسم المستخدم 3 خانات على الأقل، حروف إنجليزية أو أرقام أو _ فقط";
+  if (password.length < 4) return "كلمة المرور يجب ألا تقل عن 4 خانات";
+  return "";
+}
+
 export default function AdminClinicsPage() {
   const { ready } = useAuth();
   const [clinics, setClinics] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [name, setName] = useState("");
+  const [doctorName, setDoctorName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [accountClinicId, setAccountClinicId] = useState("");
+  const [extraDoctor, setExtraDoctor] = useState("");
+  const [extraUsername, setExtraUsername] = useState("");
+  const [extraPassword, setExtraPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,8 +43,12 @@ export default function AdminClinicsPage() {
   async function loadClinics() {
     try {
       await ensurePocketBase();
-      const records = await pb.collection("clinics").getFullList({ sort: "name" });
+      const [records, accounts] = await Promise.all([
+        pb.collection("clinics").getFullList({ sort: "name" }),
+        pb.collection(STAFF_COLLECTION).getFullList({ sort: "name" }),
+      ]);
       setClinics(records);
+      setStaff(accounts);
     } catch (err) {
       console.error(err);
       setMessage("تعذر جلب العيادات");
@@ -37,8 +65,13 @@ export default function AdminClinicsPage() {
   async function handleAdd(event) {
     event.preventDefault();
     const clinicName = name.trim();
+    const accountProblem = validateAccount(doctorName, username.trim(), password);
     if (!clinicName) {
       setMessage("أدخل اسم العيادة");
+      return;
+    }
+    if (accountProblem) {
+      setMessage(accountProblem);
       return;
     }
     if (clinics.some((clinic) => clinic.name === clinicName)) {
@@ -50,16 +83,80 @@ export default function AdminClinicsPage() {
       setBusy(true);
       setMessage("");
       await ensurePocketBase();
-      await pb.collection("clinics").create({
-        name: clinicName,
-        current_number: 0,
-      });
+      let clinicCreated = false;
+      try {
+        const clinic = await pb.collection("clinics").create({
+          name: clinicName,
+          current_number: 0,
+        });
+        clinicCreated = true;
+        await createClinicUser(clinic.id, doctorName.trim(), username.trim(), password);
+      } catch (err) {
+        err.clinicCreated = clinicCreated;
+        throw err;
+      }
       setName("");
+      setDoctorName("");
+      setUsername("");
+      setPassword("");
       await loadClinics();
-      setMessage(`تمت إضافة العيادة: ${clinicName}`);
+      setMessage(`تمت إضافة العيادة وحساب الدخول: ${clinicName}`);
     } catch (err) {
       console.error(err);
-      setMessage(err?.message || "تعذر إضافة العيادة");
+      setMessage(err?.clinicCreated ? `أُضيفت العيادة، لكن تعذر إنشاء الحساب: ${accountError(err)}` : accountError(err));
+      await loadClinics();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createClinicUser(clinicId, nextDoctorName, nextUsername, nextPassword) {
+    const doctor = await pb.collection("doctors").create({
+      name: nextDoctorName,
+      clinic: clinicId,
+      is_active: true,
+    });
+    try {
+      await pb.collection(STAFF_COLLECTION).create({
+        username: nextUsername,
+        password: nextPassword,
+        passwordConfirm: nextPassword,
+        name: nextDoctorName,
+        role: "doctor",
+        clinic: clinicId,
+        verified: true,
+      });
+    } catch (err) {
+      await pb.collection("doctors").delete(doctor.id).catch(() => {});
+      throw err;
+    }
+  }
+
+  async function handleAddUser(event) {
+    event.preventDefault();
+    const problem = validateAccount(extraDoctor, extraUsername.trim(), extraPassword);
+    if (!accountClinicId) {
+      setMessage("اختر العيادة");
+      return;
+    }
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
+    try {
+      setBusy(true);
+      setMessage("");
+      await ensurePocketBase();
+      await createClinicUser(accountClinicId, extraDoctor.trim(), extraUsername.trim(), extraPassword);
+      setAccountClinicId("");
+      setExtraDoctor("");
+      setExtraUsername("");
+      setExtraPassword("");
+      await loadClinics();
+      setMessage("تم إنشاء حساب الدخول للعيادة");
+    } catch (err) {
+      console.error(err);
+      setMessage(accountError(err));
     } finally {
       setBusy(false);
     }
@@ -76,11 +173,13 @@ export default function AdminClinicsPage() {
       setDeletingId(clinic.id);
       setMessage("");
       await ensurePocketBase();
-      const relatedDoctors = await pb.collection("doctors").getFullList({
-        filter: `clinic = "${clinic.id}"`,
-      });
+      const [relatedDoctors, relatedStaff] = await Promise.all([
+        pb.collection("doctors").getFullList({ filter: `clinic = "${clinic.id}"` }),
+        pb.collection(STAFF_COLLECTION).getFullList({ filter: `clinic = "${clinic.id}"` }),
+      ]);
+      await Promise.all(relatedDoctors.map((doctor) => pb.collection("doctors").delete(doctor.id)));
       await Promise.all(
-        relatedDoctors.map((doctor) => pb.collection("doctors").delete(doctor.id)),
+        relatedStaff.map((account) => pb.collection(STAFF_COLLECTION).delete(account.id).catch(() => {})),
       );
       await pb.collection("clinics").delete(clinic.id);
       setClinics((items) => items.filter((item) => item.id !== clinic.id));
@@ -104,7 +203,7 @@ export default function AdminClinicsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-ink sm:text-3xl">إدارة العيادات</h1>
-              <p className="mt-1 text-sm text-warm">أضف عيادة أو قسماً جديداً، أو احذف عيادة لم تعد مستخدمة لتختفي من كل الشاشات.</p>
+              <p className="mt-1 text-sm text-warm">أضف عيادة مع حساب دخول للطبيب، أو أنشئ حساباً لعيادة موجودة.</p>
             </div>
           </div>
           <UserBar />
@@ -114,23 +213,108 @@ export default function AdminClinicsPage() {
           onSubmit={handleAdd}
           className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6"
         >
-          <label className="text-sm font-semibold text-warm">
-            اسم العيادة الجديدة
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="مثال: عيادة الجلدية"
-              className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
-            />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-semibold text-warm">
+              اسم العيادة الجديدة
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="مثال: عيادة الجلدية"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              اسم الطبيب
+              <input
+                value={doctorName}
+                onChange={(event) => setDoctorName(event.target.value)}
+                placeholder="مثال: د.ليلى"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              اسم المستخدم
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="layla"
+                dir="ltr"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              كلمة المرور
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                dir="ltr"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+          </div>
           <button
             type="submit"
             disabled={busy}
             className="mt-4 rounded-2xl bg-sky-600 px-5 py-3 font-bold text-white transition hover:bg-sky-700 disabled:opacity-60"
           >
-            {busy ? "جاري الإضافة..." : "إضافة العيادة"}
+            {busy ? "جاري الإضافة..." : "إضافة العيادة والمستخدم"}
           </button>
           {message ? <p className="mt-4 font-bold text-sky-800">{message}</p> : null}
+        </form>
+
+        <form
+          onSubmit={handleAddUser}
+          className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6"
+        >
+          <h2 className="mb-4 text-xl font-black text-ink">مستخدم لعيادة موجودة</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-semibold text-warm">
+              العيادة
+              <select
+                value={accountClinicId}
+                onChange={(event) => setAccountClinicId(event.target.value)}
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="">اختر العيادة</option>
+                {clinics.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id}>{clinic.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              اسم الطبيب
+              <input
+                value={extraDoctor}
+                onChange={(event) => setExtraDoctor(event.target.value)}
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              اسم المستخدم
+              <input
+                value={extraUsername}
+                onChange={(event) => setExtraUsername(event.target.value)}
+                dir="ltr"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="text-sm font-semibold text-warm">
+              كلمة المرور
+              <input
+                value={extraPassword}
+                onChange={(event) => setExtraPassword(event.target.value)}
+                dir="ltr"
+                className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 outline-none focus:border-sky-400 focus:bg-paper focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-4 rounded-2xl bg-sky-700 px-5 py-3 font-bold text-white transition hover:bg-sky-800 disabled:opacity-60"
+          >
+            {busy ? "جاري الإنشاء..." : "إنشاء المستخدم"}
+          </button>
         </form>
 
         <section className="rounded-[32px] bg-paper p-5 shadow-[0_18px_50px_rgba(36,63,79,0.08)] ring-1 ring-sky-100 sm:p-6">
@@ -145,7 +329,14 @@ export default function AdminClinicsPage() {
                 key={clinic.id}
                 className="flex items-center justify-between gap-3 rounded-2xl bg-sky-50 px-4 py-3 font-bold text-ink ring-1 ring-sky-100"
               >
-                <span>{clinic.name}</span>
+                <span>
+                  {clinic.name}
+                  <span className="mr-2 text-sm font-semibold text-warm">
+                    {staff.some((account) => account.role === "doctor" && account.clinic === clinic.id)
+                      ? "· لها مستخدم"
+                      : "· بدون مستخدم"}
+                  </span>
+                </span>
                 <button
                   type="button"
                   disabled={Boolean(deletingId) || busy}
