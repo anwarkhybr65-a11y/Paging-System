@@ -337,8 +337,19 @@ export default function ReceptionPage() {
       setBusy(true);
       await ensurePocketBase();
       await pb.collection('tickets').delete(ticket.id);
-      setTickets((items) => items.filter((item) => item.id !== ticket.id));
+      const remaining = tickets.filter((item) => item.id !== ticket.id);
+      setTickets(remaining);
       if (lastTicket?.id === ticket.id) setLastTicket(null);
+      const sameDoctor = String(ticket.doctor || "") === String(selectedDoctor || "");
+      const sameClinic = String(ticket.clinic_id || "") === String(selectedClinic || "");
+      if (sameDoctor && sameClinic) {
+        const value = pickNextDailyNumber(
+          remaining.filter((item) => item.clinic_id === selectedClinic && String(item.doctor || "") === String(selectedDoctor || "")),
+        );
+        const text = value ? String(value) : "";
+        suggestedNumber.current = text;
+        setChosenNumber(text);
+      }
     } catch (err) {
       console.error('Error deleting ticket:', err?.data || err);
       alert(`تعذر حذف الرقم: ${pocketbaseErrorMessage(err)}`);
