@@ -180,7 +180,7 @@ export default function ReceptionPage() {
       }
       const frame = document.createElement("iframe");
       frame.setAttribute("aria-hidden", "true");
-      frame.style.cssText = "position:fixed;left:0;top:0;width:80mm;height:140mm;border:0;z-index:-1;pointer-events:none;";
+      frame.style.cssText = "position:fixed;left:0;top:0;width:70mm;height:120mm;border:0;z-index:-1;pointer-events:none;";
       document.body.appendChild(frame);
       const doc = frame.contentDocument;
       doc.open();

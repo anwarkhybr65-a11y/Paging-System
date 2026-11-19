@@ -11,11 +11,11 @@ function formatTicketTime(value) {
 }
 
 export const ticketPrintCss = `
-  @page { size: 80mm 140mm; margin: 4mm; }
+  @page { size: 70mm 120mm; margin: 1.5mm; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 72mm; background: #fff; color: #000; }
+  html, body { margin: 0; padding: 0; width: 67mm; background: #fff; color: #000; }
   body { font-family: "Cairo", Tahoma, sans-serif; }
-  .ticket-sheet { width: 72mm; margin: 0 auto; padding: 2.5mm; text-align: center; border: 2px solid #000; }
+  .ticket-sheet { width: 67mm; margin: 0; padding: 2mm; text-align: center; border: 1.5px solid #000; }
   .ticket-logo { display: block; width: 34mm; height: auto; margin: 0 auto 1mm; }
   .ticket-head h2 { margin: 0; font-size: 15px; font-weight: 900; line-height: 1.35; }
   .ticket-en { margin: 0.5mm 0 0; font-size: 10px; }
