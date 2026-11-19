@@ -10,7 +10,7 @@ const DISPLAY_SLOTS = [
   { label: "عيادة الأسنان 1", names: ["عيادة الاسنان رقم 1"] },
   { label: "عيادة الأسنان 2", names: ["عيادة الاسنان رقم 2"] },
   { label: "عيادة الأسنان 3", names: ["عيادة الاسنان رقم 3"] },
-  { label: "الباطنة", names: ["عيادة الباطنة"] },
+  { label: "الباطنيه", names: ["عيادة الباطنة"] },
   { label: "النساء والولادة", names: ["عيادة النساء و الولادة", "عيادة النساء والولادة"] },
   { label: "المختبر & اشعه", names: ["المختبر", "المختبر & اشعه", "المختبر & الاشعه", "المختبر والاشعه"] },
 ];
@@ -327,12 +327,7 @@ export default function DisplayPage() {
                   <span className="text-5xl font-black leading-none text-white xl:text-6xl">
                     {latest || "—"}
                   </span>
-                  {numbers.length > 1 ? (
-                    <span className="mt-2 max-h-12 overflow-hidden text-base font-bold leading-6 text-sky-200">
-                      {numbers.map((ticket) => ticket.ticket_number).join("  ")}
-                    </span>
-                  ) : null}
-                  <span className="mt-2 line-clamp-2 text-lg font-bold leading-6 text-sky-100">
+                  <span className="mt-3 line-clamp-2 text-lg font-bold leading-6 text-sky-100">
                     {slot.label}
                   </span>
                 </article>
