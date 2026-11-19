@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
-import { clinicNameOf, displayImageUrl, ensurePocketBase, localDateKey, pb, ticketsOnLocalDate, TICKET_STATUS } from "@/lib/pb";
+import { clinicNameOf, displayImageUrl, ensurePocketBase, localDateKey, pb, ticketsOnLocalDate, todayDateKey, TICKET_STATUS } from "@/lib/pb";
 import { armDisplayAudio, playCallAnnouncement } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
@@ -27,16 +27,6 @@ function normalizeClinicName(value) {
 function clinicForSlot(clinics, slot) {
   const names = slot.names.map(normalizeClinicName);
   return clinics.find((clinic) => names.includes(normalizeClinicName(clinic.name))) || null;
-}
-
-function latestCalledDay(tickets) {
-  let latest = "";
-  for (const ticket of tickets || []) {
-    if (!ticket.called_at) continue;
-    const key = localDateKey(ticket.called_at);
-    if (key > latest) latest = key;
-  }
-  return latest;
 }
 
 function calledNumbersForSlot(clinics, calledTickets, slot) {
@@ -114,10 +104,10 @@ export default function DisplayPage() {
       }),
       pb.collection("clinics").getFullList({ sort: "name" }),
     ]);
-    const calledDay = latestCalledDay(called);
+    const today = todayDateKey();
     return {
       calling: ticketsOnLocalDate(calling),
-      called: calledDay ? called.filter((ticket) => localDateKey(ticket.called_at) === calledDay) : [],
+      called: called.filter((ticket) => localDateKey(ticket.called_at) === today),
       clinics: clinicRecords,
     };
   }
