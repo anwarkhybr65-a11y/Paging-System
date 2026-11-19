@@ -8,6 +8,7 @@ import {
   ensurePocketBase,
   filterTicketsByDate,
   todayDateKey,
+  localDateKey,
   ticketsOnLocalDate,
   pb,
   isOccupiedStatus,
@@ -145,6 +146,19 @@ export default function ReceptionPage() {
       return list[0]?.id || '';
     });
   }, [selectedClinic, doctors]);
+
+  useEffect(() => {
+    if (!tickets.length) return;
+    const today = todayDateKey();
+    if (tickets.some((ticket) => localDateKey(ticket.created) === today)) return;
+    let latest = "";
+    for (const ticket of tickets) {
+      const key = localDateKey(ticket.created);
+      if (key > latest) latest = key;
+    }
+    if (!latest) return;
+    setArchiveDate((current) => (current === today ? latest : current));
+  }, [tickets, setArchiveDate]);
 
   const archivedTickets = filterTicketsByDate(tickets, archiveDate || todayDateKey());
   const clinicTickets = archivedTickets.filter((ticket) => ticket.clinic_id === selectedClinic);

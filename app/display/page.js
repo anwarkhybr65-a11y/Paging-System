@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
-import { clinicNameOf, displayImageUrl, ensurePocketBase, pb, ticketsOnLocalDate, TICKET_STATUS } from "@/lib/pb";
+import { clinicNameOf, displayImageUrl, ensurePocketBase, localDateKey, pb, ticketsOnLocalDate, TICKET_STATUS } from "@/lib/pb";
 import { armDisplayAudio, playCallAnnouncement } from "@/lib/sounds";
 import { BrandMark } from "../BrandMark";
 
@@ -29,13 +29,22 @@ function clinicForSlot(clinics, slot) {
   return clinics.find((clinic) => names.includes(normalizeClinicName(clinic.name))) || null;
 }
 
-function currentNumberForSlot(clinics, callingTickets, slot) {
+function latestCalledDay(tickets) {
+  let latest = "";
+  for (const ticket of tickets || []) {
+    if (!ticket.called_at) continue;
+    const key = localDateKey(ticket.called_at);
+    if (key > latest) latest = key;
+  }
+  return latest;
+}
+
+function calledNumbersForSlot(clinics, calledTickets, slot) {
   const clinic = clinicForSlot(clinics, slot);
-  if (!clinic) return "";
-  const tickets = callingTickets
-    .filter((ticket) => ticket.clinic_id === clinic.id)
-    .sort((left, right) => new Date(right.called_at || right.updated) - new Date(left.called_at || left.updated));
-  return tickets[0]?.ticket_number || "";
+  if (!clinic) return [];
+  return calledTickets
+    .filter((ticket) => ticket.clinic_id === clinic.id && ticket.called_at)
+    .sort((left, right) => Number(left.ticket_number) - Number(right.ticket_number));
 }
 
 function useClock() {
@@ -51,6 +60,7 @@ function useClock() {
 
 export default function DisplayPage() {
   const [callingTickets, setCallingTickets] = useState([]);
+  const [calledTickets, setCalledTickets] = useState([]);
   const [clinics, setClinics] = useState([]);
   const [isNewCall, setIsNewCall] = useState(false);
   const [overlayCall, setOverlayCall] = useState(null);
@@ -91,16 +101,23 @@ export default function DisplayPage() {
 
   async function fetchQueue() {
     await ensurePocketBase();
-    const [calling, clinicRecords] = await Promise.all([
+    const [calling, called, clinicRecords] = await Promise.all([
       pb.collection("tickets").getFullList({
         filter: `status = "${TICKET_STATUS.calling}"`,
         sort: "-updated",
         expand: "clinic_id",
       }),
+      pb.collection("tickets").getFullList({
+        filter: `called_at != ""`,
+        sort: "-called_at",
+        expand: "clinic_id",
+      }),
       pb.collection("clinics").getFullList({ sort: "name" }),
     ]);
+    const calledDay = latestCalledDay(called);
     return {
       calling: ticketsOnLocalDate(calling),
+      called: calledDay ? called.filter((ticket) => localDateKey(ticket.called_at) === calledDay) : [],
       clinics: clinicRecords,
     };
   }
@@ -207,9 +224,10 @@ export default function DisplayPage() {
 
     async function applyQueue(announce) {
       try {
-        const { calling, clinics: clinicRecords } = await fetchQueue();
+        const { calling, called, clinics: clinicRecords } = await fetchQueue();
         if (cancelled) return;
         setCallingTickets(calling);
+        setCalledTickets(called);
         setClinics(clinicRecords);
         const top = calling[0];
         if (!primed.current) {
@@ -297,16 +315,24 @@ export default function DisplayPage() {
           </header>
           <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-3">
             {DISPLAY_SLOTS.map((slot) => {
-              const ticketNumber = currentNumberForSlot(clinics, callingTickets, slot);
+              const numbers = calledNumbersForSlot(clinics, calledTickets, slot);
+              const latest = [...numbers].sort(
+                (left, right) => new Date(right.called_at) - new Date(left.called_at),
+              )[0]?.ticket_number || "";
               return (
                 <article
                   key={slot.label}
                   className="flex min-h-0 flex-col items-center justify-center rounded-2xl border border-sky-300/50 bg-display px-3 text-center"
                 >
                   <span className="text-5xl font-black leading-none text-white xl:text-6xl">
-                    {ticketNumber || "—"}
+                    {latest || "—"}
                   </span>
-                  <span className="mt-3 line-clamp-2 text-lg font-bold leading-6 text-sky-100">
+                  {numbers.length > 1 ? (
+                    <span className="mt-2 max-h-12 overflow-hidden text-base font-bold leading-6 text-sky-200">
+                      {numbers.map((ticket) => ticket.ticket_number).join("  ")}
+                    </span>
+                  ) : null}
+                  <span className="mt-2 line-clamp-2 text-lg font-bold leading-6 text-sky-100">
                     {slot.label}
                   </span>
                 </article>
