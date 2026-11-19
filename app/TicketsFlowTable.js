@@ -37,6 +37,26 @@ export function TicketStats({ tickets, stats: statsOverride, title, showChart = 
   );
 }
 
+function groupTicketsByDoctor(tickets) {
+  const groups = new Map();
+  for (const ticket of tickets) {
+    const key = String(ticket.doctor || "none");
+    const name = doctorNameOf(ticket) || "بدون طبيب";
+    if (!groups.has(key)) groups.set(key, { key, name, tickets: [] });
+    groups.get(key).tickets.push(ticket);
+  }
+  return [...groups.values()]
+    .sort((left, right) => left.name.localeCompare(right.name, "ar"))
+    .map((group) => ({
+      ...group,
+      tickets: [...group.tickets].sort((left, right) => {
+        const numberDiff = Number(left.ticket_number) - Number(right.ticket_number);
+        if (numberDiff) return numberDiff;
+        return new Date(left.created) - new Date(right.created);
+      }),
+    }));
+}
+
 export function TicketsFlowTable({
   tickets,
   statsTickets,
@@ -46,10 +66,16 @@ export function TicketsFlowTable({
   onSaveNote,
   onActivateReserved,
   onDeleteTicket,
+  onReprintTicket,
+  groupByDoctor = false,
   busy = false,
   showStats = true,
   statsTitle,
 }) {
+  const showActions = notesEditable || Boolean(onReprintTicket);
+  const columnCount = 10 + (showActions ? 1 : 0);
+  const groups = groupByDoctor ? groupTicketsByDoctor(tickets) : [{ name: "", tickets }];
+
   return (
     <div>
       <div className="overflow-x-auto rounded-2xl ring-1 ring-sky-100">
@@ -66,18 +92,26 @@ export function TicketsFlowTable({
               <th className="px-3 py-3 font-bold">دخول العيادة</th>
               <th className="px-3 py-3 font-bold">خروج</th>
               <th className="px-3 py-3 font-bold">ملاحظات الطبيب</th>
-              {notesEditable ? <th className="px-3 py-3 font-bold">إجراء</th> : null}
+              {showActions ? <th className="px-3 py-3 font-bold">إجراء</th> : null}
             </tr>
           </thead>
           <tbody>
             {tickets.length === 0 ? (
               <tr>
-                <td colSpan={notesEditable ? 11 : 10} className="px-3 py-10 text-center text-warm">
+                <td colSpan={columnCount} className="px-3 py-10 text-center text-warm">
                   لا توجد حالات في هذا اليوم
                 </td>
               </tr>
             ) : (
-              tickets.map((ticket) => (
+              groups.flatMap((group) => [
+                groupByDoctor ? (
+                  <tr key={`doctor-${group.key}`} className="border-t border-sky-100 bg-sky-100">
+                    <td colSpan={columnCount} className="px-3 py-2 text-base font-black text-sky-900">
+                      {group.name}
+                    </td>
+                  </tr>
+                ) : null,
+                ...group.tickets.map((ticket) => (
                 <tr key={ticket.id} className="border-t border-sky-50 align-top">
                   <td className="px-3 py-3 font-semibold text-ink">
                     {ticket.expand?.clinic_id?.name || clinics.find((clinic) => clinic.id === ticket.clinic_id)?.name || "العيادة"}
@@ -114,9 +148,19 @@ export function TicketsFlowTable({
                       <p className="max-w-48 text-warm">{ticket.notes || "—"}</p>
                     )}
                   </td>
-                  {notesEditable ? (
+                  {showActions ? (
                     <td className="px-3 py-3">
                       <div className="flex flex-col items-start gap-2">
+                        {onReprintTicket ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onReprintTicket(ticket)}
+                            className="rounded-xl bg-sky-100 px-3 py-2 text-xs font-bold text-sky-900 disabled:opacity-60"
+                          >
+                            إعادة طباعة
+                          </button>
+                        ) : null}
                         {ticket.status === TICKET_STATUS.reserved ? (
                           <button
                             type="button"
@@ -136,14 +180,13 @@ export function TicketsFlowTable({
                           >
                             حذف الرقم
                           </button>
-                        ) : (
-                          ticket.status === TICKET_STATUS.reserved ? null : <span className="text-warm">—</span>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                   ) : null}
                 </tr>
-              ))
+                )),
+              ])
             )}
           </tbody>
         </table>

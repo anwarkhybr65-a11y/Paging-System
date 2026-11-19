@@ -42,6 +42,7 @@ export default function ReceptionPage() {
   const [savingNoteId, setSavingNoteId] = useState('');
   const [archiveDate, setArchiveDate] = useWorkDay();
   const [chosenNumber, setChosenNumber] = useState('');
+  const [printRequest, setPrintRequest] = useState(null);
   const suggestedNumber = useRef(null);
 
   useEffect(() => {
@@ -205,6 +206,27 @@ export default function ReceptionPage() {
     window.setTimeout(attempt, 50);
   }
 
+  useEffect(() => {
+    if (!printRequest?.key) return;
+    printWhenReady();
+  }, [printRequest]);
+
+  function queuePrint(ticket, overrides = {}) {
+    if (!ticket) return;
+    setPrintRequest({
+      key: `${ticket.id || "ticket"}-${Date.now()}`,
+      ticketNumber: ticket.ticket_number,
+      clinicName:
+        overrides.clinicName ||
+        ticket.expand?.clinic_id?.name ||
+        clinics.find((clinic) => clinic.id === ticket.clinic_id)?.name ||
+        clinicName ||
+        "",
+      doctorName: overrides.doctorName || doctorNameOf(ticket) || "",
+      issuedAt: ticket.created,
+    });
+  }
+
   function takenToday(records) {
     return new Set(
       ticketsOnLocalDate(records)
@@ -285,7 +307,7 @@ export default function ReceptionPage() {
       setChosenNumber(upcomingText);
 
       if (shouldPrint) {
-        printWhenReady();
+        queuePrint(newTicket, { clinicName, doctorName: printedDoctorName });
       } else {
         setLastTicket(newTicket);
       }
@@ -374,7 +396,7 @@ export default function ReceptionPage() {
       });
       setLastTicket(updated);
       if (shouldPrint) {
-        printWhenReady();
+        queuePrint(ticket, { clinicName: ticketClinicName, doctorName: doctorNameOf(ticket) || printedDoctorName });
       }
     } catch (err) {
       console.error('Error activating reserved ticket:', err?.data || err);
@@ -383,6 +405,10 @@ export default function ReceptionPage() {
       setBusy(false);
     }
   };
+
+  function handleReprint(ticket) {
+    queuePrint(ticket);
+  }
 
   const handleSaveNote = async (ticket, value) => {
     try {
@@ -581,6 +607,8 @@ export default function ReceptionPage() {
               onSaveNote={handleSaveNote}
               onActivateReserved={handleActivateReserved}
               onDeleteTicket={handleDeleteTicket}
+              onReprintTicket={handleReprint}
+              groupByDoctor
               busy={busy}
               showStats={false}
             />
@@ -596,16 +624,16 @@ export default function ReceptionPage() {
         </section>
       </div>
 
-      {lastTicket && lastTicket.status !== TICKET_STATUS.reserved && (
+      {printRequest ? (
         <div className="ticket-print-host">
           <PrintTicket
-            ticketNumber={lastTicket.ticket_number}
-            clinicName={clinicName}
-            doctorName={printedDoctorName}
-            issuedAt={lastTicket.created}
+            ticketNumber={printRequest.ticketNumber}
+            clinicName={printRequest.clinicName}
+            doctorName={printRequest.doctorName}
+            issuedAt={printRequest.issuedAt}
           />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
