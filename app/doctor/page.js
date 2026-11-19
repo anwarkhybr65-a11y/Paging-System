@@ -391,14 +391,6 @@ export default function DoctorPage() {
                 {selectedWaiting ? `نداء الرقم ${selectedWaiting.ticket_number}` : 'نداء المريض التالي'}
               </button>
               <button
-                onClick={() => handleRecall(currentTicket)}
-                disabled={busy || !currentTicket}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-100 px-3 py-2.5 text-sm font-black text-sky-900 transition hover:bg-sky-200 disabled:opacity-60"
-              >
-                <RefreshCcw size={16} />
-                إعادة المناداة
-              </button>
-              <button
                 onClick={handleEnterClinic}
                 disabled={busy || !currentTicket || Boolean(currentTicket?.entered_at)}
                 className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-black text-white transition hover:bg-sky-800 disabled:opacity-60"

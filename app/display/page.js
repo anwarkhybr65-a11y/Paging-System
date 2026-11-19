@@ -58,6 +58,7 @@ export default function DisplayPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const overlayTimer = useRef(null);
   const overlayToken = useRef(0);
+  const callLoops = useRef(new Map());
   const callQueue = useRef(Promise.resolve());
   const announcedKeys = useRef(new Set());
   const unheardCall = useRef(null);
@@ -112,14 +113,16 @@ export default function DisplayPage() {
     };
   }
 
-  function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
-    if (callKey && announcedKeys.current.has(callKey)) return;
-    if (callKey) {
-      announcedKeys.current.add(callKey);
-      lastCallKey.current = callKey;
-    }
-    if (ticketId) lastAnnouncedId.current = ticketId;
+  function stopCallLoop(ticketId) {
+    if (!ticketId) return;
+    const loop = callLoops.current.get(ticketId);
+    if (!loop) return;
+    loop.cancelled = true;
+    if (loop.timer) clearTimeout(loop.timer);
+    callLoops.current.delete(ticketId);
+  }
 
+  function showCallOverlay(ticketNumber, clinicName) {
     const token = ++overlayToken.current;
     setOverlayCall({ ticketNumber, clinicName });
     setIsNewCall(true);
@@ -129,13 +132,43 @@ export default function DisplayPage() {
       setIsNewCall(false);
       setOverlayCall(null);
     }, 30000);
+  }
 
-    const announcement = { ticketNumber, clinicName, callKey, playing: false };
+  function armCallLoop(ticketNumber, clinicName, ticketId) {
+    stopCallLoop(ticketId);
+    const loop = { cancelled: false, timer: null, startedAt: Date.now() };
+    callLoops.current.set(ticketId, loop);
+    const schedule = () => {
+      if (loop.cancelled || callLoops.current.get(ticketId) !== loop) return;
+      loop.timer = setTimeout(async () => {
+        if (loop.cancelled || callLoops.current.get(ticketId) !== loop) return;
+        const played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
+        if (loop.cancelled || callLoops.current.get(ticketId) !== loop) return;
+        if (played) showCallOverlay(ticketNumber, clinicName);
+        schedule();
+      }, 20000);
+    };
+    return schedule;
+  }
+
+  function startCallOverlay(ticketNumber, clinicName, callKey, ticketId) {
+    if (callKey && announcedKeys.current.has(callKey)) return;
+    if (callKey) {
+      announcedKeys.current.add(callKey);
+      lastCallKey.current = callKey;
+    }
+    if (ticketId) lastAnnouncedId.current = ticketId;
+
+    showCallOverlay(ticketNumber, clinicName);
+    const continueLoop = ticketId ? armCallLoop(ticketNumber, clinicName, ticketId) : () => {};
+
+    const announcement = { ticketNumber, clinicName, callKey, playing: false, continueLoop };
     callQueue.current = callQueue.current
       .then(async () => {
         const played = Boolean(await playCallAnnouncement(ticketNumber, clinicName));
         if (played) {
           if (unheardCall.current?.callKey === callKey) unheardCall.current = null;
+          continueLoop();
           return;
         }
         unheardCall.current = announcement;
@@ -192,8 +225,10 @@ export default function DisplayPage() {
       pending.playing = true;
       playCallAnnouncement(pending.ticketNumber, pending.clinicName).then((played) => {
         if (unheardCall.current !== pending) return;
-        if (played) unheardCall.current = null;
-        else pending.playing = false;
+        if (played) {
+          unheardCall.current = null;
+          pending.continueLoop?.();
+        } else pending.playing = false;
       });
     };
     window.addEventListener("pointerdown", replay, true);
@@ -219,6 +254,11 @@ export default function DisplayPage() {
         setCallingTickets(calling);
         setCalledTickets(called);
         setClinics(clinicRecords);
+        const stillCalling = new Set(calling.filter((ticket) => !ticket.entered_at).map((ticket) => ticket.id));
+        Array.from(callLoops.current.entries()).forEach(([ticketId, loop]) => {
+          if (stillCalling.has(ticketId) || Date.now() - loop.startedAt < 5000) return;
+          stopCallLoop(ticketId);
+        });
         const top = calling[0];
         if (!primed.current) {
           primed.current = true;
@@ -257,7 +297,10 @@ export default function DisplayPage() {
 
       unsub.tickets = await pb.collection("tickets").subscribe("*", async (event) => {
         const record = event?.record;
-        if (record?.status === TICKET_STATUS.calling) await announceCall(record);
+        if (record?.id && (record.entered_at || record.status !== TICKET_STATUS.calling)) {
+          stopCallLoop(record.id);
+        }
+        if (record?.status === TICKET_STATUS.calling && !record.entered_at) await announceCall(record);
         await applyQueue(false);
       });
       unsub.images = await pb.collection("display_images").subscribe("*", () => {
@@ -272,6 +315,11 @@ export default function DisplayPage() {
       cancelled = true;
       clearInterval(poll);
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
+      callLoops.current.forEach((loop) => {
+        loop.cancelled = true;
+        if (loop.timer) clearTimeout(loop.timer);
+      });
+      callLoops.current.clear();
       if (typeof unsub.tickets === "function") unsub.tickets();
       else pb.collection("tickets").unsubscribe("*");
       if (typeof unsub.images === "function") unsub.images();
