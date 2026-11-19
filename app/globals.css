@@ -185,13 +185,13 @@
 .ticket-preview {
   width: 100%;
   max-width: 260px;
-  border: 1px dashed #cfe3ef;
-  border-radius: 18px;
+  border: 2px solid #000;
+  border-radius: 0;
 }
 
 @page ticket {
-  size: 72mm 130mm;
-  margin: 2mm;
+  size: 80mm 140mm;
+  margin: 4mm;
 }
 
 @page report {
@@ -208,7 +208,7 @@
   html:not(.report-print),
   html:not(.report-print) body,
   html:not(.report-print) body > div {
-    width: 72mm !important;
+    width: 80mm !important;
     min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
@@ -246,7 +246,7 @@
 
   .ticket-print-host {
     position: static;
-    width: 68mm;
+    width: 80mm;
     height: auto;
     overflow: visible;
     opacity: 1;
@@ -256,10 +256,11 @@
     page: ticket;
     position: static;
     box-sizing: border-box;
-    width: 68mm;
-    max-width: 68mm;
+    width: 72mm;
+    max-width: 72mm;
     margin: 0 auto;
-    padding: 0;
+    padding: 2.5mm;
+    border: 2px solid #000;
     overflow: visible;
     background: #fff;
     color: #111;
