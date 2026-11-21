@@ -43,7 +43,8 @@ export default function ReceptionPage() {
   const [archiveDate, setArchiveDate] = useWorkDay();
   const [chosenNumber, setChosenNumber] = useState('');
   const [printRequest, setPrintRequest] = useState(null);
-  const suggestedNumber = useRef(null);
+  const suggestedNumber = useRef("");
+  const numberScope = useRef("");
 
   useEffect(() => {
     async function fetchClinics() {
@@ -149,26 +150,31 @@ export default function ReceptionPage() {
   const archivedTickets = filterTicketsByDate(tickets, archiveDate || todayDateKey());
   const clinicTickets = archivedTickets.filter((ticket) => ticket.clinic_id === selectedClinic);
   const liveTickets = ticketsOnLocalDate(tickets);
-  function ticketsForDoctor(records) {
-    return (records || []).filter((ticket) => String(ticket.doctor || "") === String(selectedDoctor || ""));
+  function doctorIdOf(ticket) {
+    if (!ticket?.doctor) return ticket?.expand?.doctor?.id || "";
+    if (typeof ticket.doctor === "string") return ticket.doctor;
+    return ticket.doctor.id || ticket.expand?.doctor?.id || "";
   }
 
-  const nextNumber = selectedClinic
-    ? pickNextDailyNumber(ticketsForDoctor(tickets.filter((ticket) => ticket.clinic_id === selectedClinic)))
+  function ticketsForDoctor(records, doctorId = selectedDoctor) {
+    const target = String(doctorId || "");
+    return (records || []).filter((ticket) => doctorIdOf(ticket) === target);
+  }
+
+  const nextNumber = selectedDoctor
+    ? pickNextDailyNumber(ticketsForDoctor(tickets))
     : null;
 
   useEffect(() => {
-    suggestedNumber.current = null;
-  }, [selectedClinic, selectedDoctor]);
-
-  useEffect(() => {
-    const suggested = nextNumber ? String(nextNumber) : '';
-    setChosenNumber((current) => {
-      if (suggestedNumber.current == null || current === suggestedNumber.current) return suggested;
-      return current;
-    });
+    const scope = `${selectedClinic}|${selectedDoctor}`;
+    const suggested = nextNumber ? String(nextNumber) : "";
+    const scopeChanged = numberScope.current !== scope;
+    const followingSuggestion = chosenNumber === "" || chosenNumber === suggestedNumber.current;
+    if (!scopeChanged && !followingSuggestion) return;
+    numberScope.current = scope;
     suggestedNumber.current = suggested;
-  }, [selectedClinic, selectedDoctor, nextNumber]);
+    setChosenNumber(suggested);
+  }, [selectedClinic, selectedDoctor, nextNumber, chosenNumber]);
 
   function printWhenReady() {
     const startedAt = Date.now();
@@ -180,11 +186,11 @@ export default function ReceptionPage() {
       }
       const frame = document.createElement("iframe");
       frame.setAttribute("aria-hidden", "true");
-      frame.style.cssText = "position:fixed;left:0;top:0;width:70mm;height:120mm;border:0;z-index:-1;pointer-events:none;";
+      frame.style.cssText = "position:fixed;left:0;top:0;width:80mm;height:140mm;border:0;z-index:-1;pointer-events:none;";
       document.body.appendChild(frame);
       const doc = frame.contentDocument;
       doc.open();
-      doc.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تذكرة</title><style>${ticketPrintCss}</style></head><body>${ticket.outerHTML}</body></html>`);
+      doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>تذكرة</title><style>${ticketPrintCss}</style></head><body>${ticket.outerHTML}</body></html>`);
       doc.close();
       let started = false;
       const go = () => {
@@ -285,7 +291,7 @@ export default function ReceptionPage() {
     try {
       setBusy(true);
       const clinicTicketsToday = ticketsForDoctor(await pb.collection('tickets').getFullList({
-        filter: `clinic_id = "${selectedClinic}"`,
+        filter: `doctor = "${selectedDoctor}"`,
         sort: '-created',
       }));
       const picked = chosenTicketValue(clinicTicketsToday);
@@ -332,7 +338,7 @@ export default function ReceptionPage() {
     try {
       setBusy(true);
       const clinicTicketsToday = ticketsForDoctor(await pb.collection('tickets').getFullList({
-        filter: `clinic_id = "${selectedClinic}"`,
+        filter: `doctor = "${selectedDoctor}"`,
         sort: '-created',
       }));
       const ticketValue = pickNextDailyNumber(clinicTicketsToday);
@@ -366,7 +372,7 @@ export default function ReceptionPage() {
       const sameClinic = String(ticket.clinic_id || "") === String(selectedClinic || "");
       if (sameDoctor && sameClinic) {
         const value = pickNextDailyNumber(
-          remaining.filter((item) => item.clinic_id === selectedClinic && String(item.doctor || "") === String(selectedDoctor || "")),
+          ticketsForDoctor(remaining),
         );
         const text = value ? String(value) : "";
         suggestedNumber.current = text;
