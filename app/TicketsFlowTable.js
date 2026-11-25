@@ -67,12 +67,13 @@ export function TicketsFlowTable({
   onActivateReserved,
   onDeleteTicket,
   onReprintTicket,
+  onEnterClinic,
   groupByDoctor = false,
   busy = false,
   showStats = true,
   statsTitle,
 }) {
-  const showActions = notesEditable || Boolean(onReprintTicket);
+  const showActions = notesEditable || Boolean(onReprintTicket) || Boolean(onEnterClinic);
   const columnCount = 10 + (showActions ? 1 : 0);
   const groups = groupByDoctor ? groupTicketsByDoctor(tickets) : [{ name: "", tickets }];
 
@@ -151,6 +152,16 @@ export function TicketsFlowTable({
                   {showActions ? (
                     <td className="px-3 py-3">
                       <div className="flex flex-col items-start gap-2">
+                        {onEnterClinic && ticket.called_at && !ticket.entered_at && ticket.status !== TICKET_STATUS.reserved ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onEnterClinic(ticket)}
+                            className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                          >
+                            دخول العيادة
+                          </button>
+                        ) : null}
                         {onReprintTicket ? (
                           <button
                             type="button"

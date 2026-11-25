@@ -11,6 +11,7 @@ import {
   ticketsOnLocalDate,
   pb,
   isOccupiedStatus,
+  nowIso,
   pickNextDailyNumber,
   ticketStatusLabel,
   TICKET_MAX,
@@ -416,6 +417,23 @@ export default function ReceptionPage() {
     queuePrint(ticket);
   }
 
+  const handleEnterClinic = async (ticket) => {
+    if (!ticket?.id || busy || ticket.entered_at) return;
+    try {
+      setBusy(true);
+      const enteredAt = nowIso();
+      const updated = await pb.collection('tickets').update(ticket.id, { entered_at: enteredAt });
+      setTickets((items) =>
+        items.map((item) => (item.id === ticket.id ? { ...item, ...updated, entered_at: enteredAt } : item)),
+      );
+    } catch (err) {
+      console.error('Error recording clinic entry:', err?.data || err);
+      alert(`تعذر تسجيل دخول العيادة: ${pocketbaseErrorMessage(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleSaveNote = async (ticket, value) => {
     try {
       setSavingNoteId(ticket.id);
@@ -614,6 +632,7 @@ export default function ReceptionPage() {
               onActivateReserved={handleActivateReserved}
               onDeleteTicket={handleDeleteTicket}
               onReprintTicket={handleReprint}
+              onEnterClinic={handleEnterClinic}
               groupByDoctor
               busy={busy}
               showStats={false}
